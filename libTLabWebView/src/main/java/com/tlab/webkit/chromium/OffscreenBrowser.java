@@ -13,13 +13,12 @@ import com.tlab.viewtobuffer.ViewToBufferLayout;
 import com.tlab.viewtobuffer.ViewToHWBRenderer;
 import com.tlab.viewtobuffer.ViewToPBORenderer;
 import com.tlab.viewtobuffer.ViewToSurfaceLayout;
+import com.tlab.webkit.BrowserMouseBridge;
 import com.unity3d.player.UnityPlayer;
 
 public class OffscreenBrowser extends BaseOffscreenBrowser {
     protected CustomGLSurfaceView mGlSurfaceView;
-
     protected LinearLayout mCaptureLayout;
-
     private final static String TAG = "OffscreenBrowser (Chromium)";
 
     public void init() {
@@ -64,6 +63,7 @@ public class OffscreenBrowser extends BaseOffscreenBrowser {
         } else if (mCaptureMode == CaptureMode.Surface) {
             mRootLayout.addView(mCaptureLayout, new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT));
         }
+        BrowserMouseBridge.setBrowser(this);
 
         new Thread(() -> {
             while (mCaptureThreadKeepAlive) {

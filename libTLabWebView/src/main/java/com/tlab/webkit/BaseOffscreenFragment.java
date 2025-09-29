@@ -20,47 +20,51 @@ import com.unity3d.player.UnityPlayer;
 public abstract class BaseOffscreenFragment extends Fragment {
 
     private static final String TAG = "BaseOffscreenFragment";
-
     public enum CaptureMode {
         HardwareBuffer, ByteBuffer, Surface
     }
-
     protected CaptureMode mCaptureMode = CaptureMode.HardwareBuffer;
-
     protected final Common.ResolutionState mResState = new Common.ResolutionState();
-
     protected ViewToBufferRenderer mViewToBufferRenderer;
-
     protected RelativeLayout mRootLayout;
-
     protected long[] mHwbTexID;
     protected boolean mIsVulkan;
-
     protected SharedTexture mSharedTexture;
     protected HardwareBuffer mSharedBuffer;
-
     protected boolean mCaptureThreadKeepAlive = true;
     protected final Object mCaptureThreadMutex = new Object();
-
     protected int mFps = 30;
-
     public boolean mInitialized = false;
-
     public boolean mDisposed = false;
-
     protected boolean mIsSharedBufferExchanged = true;
 
     @Override
     public void onPause() {
         super.onPause();
-        if ((mCaptureMode != CaptureMode.Surface) && (mViewToBufferRenderer != null))
-            mViewToBufferRenderer.disable();
-        else if (mCaptureMode == CaptureMode.Surface) RemoveSurface();
+        /// 18-09-25 Moved below to onDetach to see if it prevents tear down on multi resume
+//        if ((mCaptureMode != CaptureMode.Surface) && (mViewToBufferRenderer != null))
+//            mViewToBufferRenderer.disable();
+//        else if (mCaptureMode == CaptureMode.Surface) RemoveSurface();
+
     }
 
     @Override
     public void onResume() {
         super.onResume();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+    }
+
+    @Override
+    public void onDetach() {
+        super.onDetach();
+        if ((mCaptureMode != CaptureMode.Surface) && (mViewToBufferRenderer != null))
+            mViewToBufferRenderer.disable();
+        else if (mCaptureMode == CaptureMode.Surface) RemoveSurface();
+
     }
 
     public void initParam(int viewWidth, int viewHeight, int texWidth, int texHeight, int screenWidth, int screenHeight, boolean isVulkan, CaptureMode captureMode) {

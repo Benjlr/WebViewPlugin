@@ -1,3 +1,4 @@
+// File: com/tlab/webkit/chromium/UnityConnect.java
 package com.tlab.webkit.chromium;
 
 import android.annotation.SuppressLint;
@@ -10,20 +11,16 @@ import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.net.http.SslError;
+import android.os.Build;
 import android.os.Message;
-
 import android.util.Log;
+import android.view.InputDevice;
+import android.view.MotionEvent;
+import android.view.PointerIcon;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
-
-import com.tlab.webkit.Common;
-import com.tlab.webkit.IBrowser;
-import com.tlab.webkit.Common.*;
-import com.tlab.widget.AlertDialog;
-import com.unity3d.player.UnityPlayer;
-
 import android.webkit.DownloadListener;
 import android.webkit.HttpAuthHandler;
 import android.webkit.JavascriptInterface;
@@ -39,6 +36,12 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 
+import com.tlab.webkit.Common;
+import com.tlab.webkit.IBrowser;
+import com.tlab.webkit.Common.*;
+import com.tlab.widget.AlertDialog;
+import com.unity3d.player.UnityPlayer;
+
 import java.nio.ByteBuffer;
 import java.util.Hashtable;
 import java.util.Map;
@@ -47,203 +50,96 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class UnityConnect extends OffscreenBrowser implements IBrowser {
-
     private WebView mWebView;
     private View mVideoView;
-
     private ValueCallback<Uri[]> mFilePathCallback;
 
     private final Map<String, ByteBuffer> mJSPrivateBuffer = new Hashtable<>();
     private final Map<String, ByteBuffer> mJSPublicBuffer = new Hashtable<>();
 
-    private final static String TAG = "TLabWebView (Chromium)";
+    private static final String TAG = "AreDesk (Chromium)";
 
-    /**
-     * java methods that can be called from the javascript side
-     */
     public class JSInterface {
-
-        /**
-         * Stores the result of processing in the result queue
-         * @param id Result Id
-         * @param result Result of processing
-         */
         @JavascriptInterface
         public void postResult(final int id, final String result) {
             mAsyncResult.post(new AsyncResult(id, result), AsyncResult.Status.COMPLETE);
         }
-
         @JavascriptInterface
         public void postResult(final int id, final int result) {
             mAsyncResult.post(new AsyncResult(id, result), AsyncResult.Status.COMPLETE);
         }
-
         @JavascriptInterface
         public void postResult(final int id, final double result) {
             mAsyncResult.post(new AsyncResult(id, result), AsyncResult.Status.COMPLETE);
         }
-
         @JavascriptInterface
         public void postResult(final int id, final boolean result) {
             mAsyncResult.post(new AsyncResult(id, result), AsyncResult.Status.COMPLETE);
         }
 
-        /**
-         * Send a message to a Game Object on Unity
-         * @param go name of GameObject
-         * @param method Method name (a class with a matching method must be attached to the GameObject)
-         * @param message Message to be sent
-         */
         @JavascriptInterface
         public void unitySendMessage(String go, String method, String message) {
             UnityPlayer.UnitySendMessage(go, method, message);
         }
 
-        /**
-         * Send a message to Unity type. The sent message is handled by the receiving WebView instance.
-         * @param message Message to be sent
-         */
         @JavascriptInterface
         public void unityPostMessage(String message) {
             mUnityPostMessageQueue.add(new EventCallback.Message(EventCallback.Type.Raw, message));
         }
 
-        /**
-         * Prepare Byte Buffer on the Java side. This is mainly used when sending large data from the javascript side to Java.
-         * @param key buffer identifier
-         * @param bufferSize Buffer size
-         * @return Whether the buffer has been successfully secured
-         */
         @JavascriptInterface
         public boolean malloc(String key, int bufferSize) {
             if (!mJSPublicBuffer.containsKey(key)) {
-                ByteBuffer buf = ByteBuffer.allocate(bufferSize);
-                mJSPublicBuffer.put(key, buf);
-                //Log.i(TAG, "[malloc] ok: " + bufferSize);
+                mJSPublicBuffer.put(key, ByteBuffer.allocate(bufferSize));
                 return true;
             }
             return false;
         }
 
-        /**
-         * Release the reserved buffer
-         * @param key buffer identifier
-         */
         @JavascriptInterface
-        public void free(String key) {
-            mJSPublicBuffer.remove(key);
-            //Log.i(TAG, "[free] ok");
-        }
+        public void free(String key) { mJSPublicBuffer.remove(key); }
 
-        /**
-         * Write data sent from javascript to buffer on java side
-         * @param key buffer identifier
-         * @param bytes Data to be written
-         */
         @JavascriptInterface
         public void write(String key, byte[] bytes) {
             if (mJSPublicBuffer.containsKey(key)) {
                 ByteBuffer buf = mJSPublicBuffer.get(key);
-                assert buf != null;
-                buf.put(bytes, 0, bytes.length);
-                //Log.i(TAG, "[write] ok: " + buf.position());
+                if (buf != null) buf.put(bytes, 0, bytes.length);
             }
         }
 
-        /**
-         * This plug-in converts a blob url to a data url for downloading from a blob url and writes
-         * the converted data url from javascript to a buffer on the Java side. In this case, it is
-         * necessary to call malloc(), write(), and free() from javascript, but the functions and the
-         * buffer list are separated to avoid conflicts of buffer identifiers between plugin users.
-         * @param url Blob url (buffer identifier)
-         * @param bufferSize Buffer size
-         * @return Whether the buffer has been successfully secured
-         */
         @JavascriptInterface
         public boolean _malloc(String url, int bufferSize) {
             if (!mJSPrivateBuffer.containsKey(url)) {
-                ByteBuffer buf = ByteBuffer.allocate(bufferSize);
-                mJSPrivateBuffer.put(url, buf);
-                //Log.i(TAG, "[malloc] ok: " + bufferSize);
+                mJSPrivateBuffer.put(url, ByteBuffer.allocate(bufferSize));
                 return true;
             }
             return false;
         }
 
         @JavascriptInterface
-        public void _free(String key) {
-            mJSPrivateBuffer.remove(key);
-            //Log.i(TAG, "[free] ok");
-        }
+        public void _free(String key) { mJSPrivateBuffer.remove(key); }
 
         @JavascriptInterface
         public void _write(String key, byte[] bytes) {
             if (mJSPrivateBuffer.containsKey(key)) {
                 ByteBuffer buf = mJSPrivateBuffer.get(key);
-                assert buf != null;
-                buf.put(bytes, 0, bytes.length);
-                //Log.i(TAG, "[write] ok: " + buf.position());
+                if (buf != null) buf.put(bytes, 0, bytes.length);
             }
         }
 
-        /**
-         * After converting a blob url to a data url, call this process.
-         * The data url already written to the buffer on the java side is downloaded to local storage.
-         * @param url Blob url (buffer identifier)
-         * @param contentDisposition contentDisposition
-         * @param mimetype mimetype
-         */
-        @JavascriptInterface
-        public void fetchBlob(String url, String contentDisposition, String mimetype) {
-            if (mJSPrivateBuffer.containsKey(url)) {
-                ByteBuffer buf = mJSPrivateBuffer.get(url);
-                assert buf != null;
-                DownloadSupport support = new DownloadSupport(mDownloadOption, mDownloadProgress::put, mUnityPostMessageQueue);
-                support.fetchFromDataUrl(new String(buf.array()), contentDisposition, mimetype);
-                mJSPrivateBuffer.remove(url);
-            }
-        }
     }
 
-    /**
-     * Initialize WebView if it is not initialized yet.
-     *
-     * @param webWidth     WebView width
-     * @param webHeight    WebView height
-     * @param texWidth     Texture width
-     * @param texHeight    Texture height
-     * @param screenWidth  Screen width
-     * @param screenHeight Screen height
-     * @param url          init url
-     * @param isVulkan     is this app vulkan api
-     */
-    //@formatter:off
-    @SuppressLint("SetJavaScriptEnabled") public void InitNativePlugin(int webWidth, int webHeight,
-                           int texWidth, int texHeight,
-                           int screenWidth, int screenHeight,
-                           String url, boolean isVulkan, int captureMode) {
-        //@formatter:on
+    // ===== Init =====
+    @SuppressLint("SetJavaScriptEnabled")
+    public void InitNativePlugin(int webWidth, int webHeight,
+                                 int texWidth, int texHeight,
+                                 int screenWidth, int screenHeight,
+                                 String url, boolean isVulkan, int captureMode) {
         if (webWidth <= 0 || webHeight <= 0) return;
 
         mSessionState.loadUrl = url;
 
         final UnityConnect self = this;
-
-        // -----------------------------------------------------------
-        // Hierarchical structure.
-        // parent -----
-        //            |
-        //            |
-        //            | mRootLayout -----
-        //                              |
-        //                              |
-        //                              | mCaptureLayout -----
-        //                              |                    |
-        //                              |                    |
-        //                              |                    | mWebView
-        //                              |
-        //                              |
-        //                              | mGlSurfaceView
 
         setRetainInstance(true);
 
@@ -251,9 +147,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         a.getFragmentManager().beginTransaction().add(0, self).commitAllowingStateLoss();
 
         a.runOnUiThread(() -> {
-
             initParam(webWidth, webHeight, texWidth, texHeight, screenWidth, screenHeight, isVulkan, OffscreenBrowser.CaptureMode.values()[captureMode]);
-
             init();
 
             if (mWebView == null) {
@@ -262,11 +156,10 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             }
 
             mWebView.setWebViewClient(new WebViewClient() {
+
                 @Override
                 public void onReceivedHttpAuthRequest(WebView view, final HttpAuthHandler handler, final String host, final String realm) {
-                    String userName = null;
-                    String userPass = null;
-
+                    String userName = null, userPass = null;
                     if (handler.useHttpAuthUsernamePassword() && view != null) {
                         String[] haup = view.getHttpAuthUsernamePassword(host, realm);
                         if (haup != null && haup.length == 2) {
@@ -274,162 +167,87 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
                             userPass = haup[1];
                         }
                     }
-
-                    if (userName != null && userPass != null) {
-                        handler.proceed(userName, userPass);
-                    } else {
-                        showHttpAuthDialog(handler, host, realm);
-                    }
+                    if (userName != null && userPass != null) handler.proceed(userName, userPass);
+                    else showHttpAuthDialog(handler, host, realm);
                 }
 
-                /**
-                 * @param view    The WebView that is initiating the callback.
-                 * @param url     The url to be loaded.
-                 * @param favicon The favicon for this page if it already exists in the
-                 *                database.
-                 */
                 @Override
                 public void onPageStarted(WebView view, String url, Bitmap favicon) {
-                    if (mWebView != null)
-                        mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
-                    EventCallback.Message message = new EventCallback.Message(EventCallback.Type.OnPageStart, url);
-                    mUnityPostMessageQueue.add(message);
+                    if (mWebView != null) mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
+                    mUnityPostMessageQueue.add(new EventCallback.Message(EventCallback.Type.OnPageStart, url));
                 }
 
-                /**
-                 * @param view The WebView that is initiating the callback.
-                 * @param url  The url of the page.
-                 */
                 @Override
                 public void onPageFinished(WebView view, String url) {
-                    if (mWebView != null)
-                        mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
+                    if (mWebView != null) mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
                     mSessionState.actualUrl = url;
-                    EventCallback.Message message = new EventCallback.Message(EventCallback.Type.OnPageFinish, url);
-                    mUnityPostMessageQueue.add(message);
+                    mUnityPostMessageQueue.add(new EventCallback.Message(EventCallback.Type.OnPageFinish, url));
                 }
 
-                /**
-                 * @param view The WebView that is initiating the callback.
-                 * @param url  The url of the resource the WebView will load.
-                 */
-                @Override
-                public void onLoadResource(WebView view, String url) {
-                    // Need to do null check
-                    // Error AndroidRuntime java.lang.NullPointerException: Attempt to invoke virtual method 'boolean android.webkit.WebView.canGoBack()' on a null object reference
-                    if (mWebView != null)
-                        mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
-                }
-
-                /**
-                 * @param view    The WebView that is initiating the callback.
-                 * @param handler An {@link SslErrorHandler} that will handle the user's
-                 *                response.
-                 * @param error   The SSL error object.
-                 */
-                @SuppressLint("WebViewClientOnReceivedSslError")
-                @Override
-                public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-
-                    // ----------------------------------------------------------------------------------------
-
-                    AlertDialog.Init dialog = new AlertDialog.Init(AlertDialog.Init.Reason.ERROR, "Ssl Error", "Your connection is not private");
-                    dialog.setPositive("Enter", selected -> handler.proceed());
-                    dialog.setNegative("Back to safety", selected -> handler.cancel());
-                    if (mOnDialogResult != null) mOnDialogResult.dismiss();
-                    mOnDialogResult = dialog.getOnResultListener();
-                    mUnityPostMessageQueue.add(new EventCallback.Message(EventCallback.Type.OnDialog, dialog.marshall()));
-
-                    // ----------------------------------------------------------------------------------------
-
-                    // For app store compatibility
-                    // https://github.com/TLabAltoh/TLabWebViewVR/issues/35
-                    // https://github.com/TLabAltoh/TLabWebView/issues/8
-
-                    // handler.cancel();
-
-                    // ----------------------------------------------------------------------------------------
-                }
-
-                /**
-                 * @param view    The WebView that is initiating the callback.
-                 * @param request Object containing the details of the request.
-                 * @return True to cancel the current load, otherwise return false.
-                 */
+                @SuppressLint("WebViewClientShouldOverrideUrlLoading")
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                     Uri uri = request.getUrl();
-                    String url = uri.toString();
+                    String next = uri.toString();
 
-                    if (mWebView != null)
-                        mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
+                    if (mWebView != null) mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
 
                     if (mIntentFilters != null) {
                         for (String intentFilter : mIntentFilters) {
-                            Pattern pattern = Pattern.compile(intentFilter);
-                            Matcher matcher = pattern.matcher(url);
-                            if (matcher.matches()) {
-                                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                            if (Pattern.compile(intentFilter).matcher(next).matches()) {
+                                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(next));
                                 view.getContext().startActivity(intent);
                                 return true;
                             }
                         }
                     }
 
-                    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("file://") || url.startsWith("javascript:")) {
-                        // Let webview handle the URL
-                        return false;
-                    } else if (url.startsWith("unity:")) {
-                        String message = url.substring(6);
+                    if (next.startsWith("http://") || next.startsWith("https://")
+                            || next.startsWith("file://") || next.startsWith("javascript:")) {
+                        return false; // let WebView handle it
+                    } else if (next.startsWith("unity:")) {
+                        // handle custom scheme here if you like
                         return true;
                     }
 
                     return true;
                 }
-            });
-            mWebView.setWebChromeClient(new WebChromeClient() {
+
+                @SuppressLint("WebViewClientOnReceivedSslError")
                 @Override
-                public boolean onCreateWindow(WebView view, boolean dialog, boolean userGesture, Message resultMsg) {
-                    return false;
+                public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                    AlertDialog.Init dialog = new AlertDialog.Init(AlertDialog.Init.Reason.ERROR, "Ssl Error", "Your connection is not private");
+                    dialog.setPositive("Enter", selected -> handler.proceed());
+                    dialog.setNegative("Back to safety", selected -> handler.cancel());
+                    if (mOnDialogResult != null) mOnDialogResult.dismiss();
+                    mOnDialogResult = dialog.getOnResultListener();
+                    mUnityPostMessageQueue.add(new EventCallback.Message(EventCallback.Type.OnDialog, dialog.marshall()));
                 }
 
-                public boolean onConsoleMessage(ConsoleMessage cm) {
+                @Override
+                public void onLoadResource(WebView view, String url) {
+                    if (mWebView != null) mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
+                }
+            });
+
+            mWebView.setWebChromeClient(new WebChromeClient() {
+                @Override public boolean onCreateWindow(WebView view, boolean dialog, boolean userGesture, Message resultMsg) { return false; }
+                @Override public boolean onConsoleMessage(ConsoleMessage cm) {
                     Log.d(TAG, cm.message() + " -- From line " + cm.lineNumber() + " of " + cm.sourceId());
                     return true;
                 }
-
-                /**
-                 * <a href="https://qiita.com/NaokiHaba/items/eb0ad99ac56af4748227">...</a>
-                 * <a href="https://www.wired-cat.com/entry/2023/02/17/205235#google_vignette">...</a>
-                 *
-                 * @param view     is the View object to be shown.
-                 * @param callback invoke this callback to request the page to exit
-                 *                 full screen mode.
-                 */
-                @Override
-                public void onShowCustomView(View view, CustomViewCallback callback) {
+                @Override public void onShowCustomView(View view, CustomViewCallback callback) {
                     super.onShowCustomView(view, callback);
                     mVideoView = view;
-                    mWebView.addView(mVideoView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                    mWebView.addView(mVideoView, new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                 }
-
-                @Override
-                public void onHideCustomView() {
+                @Override public void onHideCustomView() {
                     super.onHideCustomView();
-                    mWebView.removeView(mVideoView);
+                    if (mVideoView != null) mWebView.removeView(mVideoView);
                     mVideoView = null;
                 }
-
-                /**
-                 * @param webView           The WebView instance that is initiating the request.
-                 * @param filePathCallback  Invoke this callback to supply the list of paths to files to upload,
-                 *                          or {@code null} to cancel. Must only be called if the
-                 *                          {@link #onShowFileChooser} implementation returns {@code true}.
-                 * @param fileChooserParams Describes the mode of file chooser to be opened, and options to be
-                 *                          used with it.
-                 */
-                @Override
-                public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                @Override public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                     if (mFilePathCallback != null) mFilePathCallback.onReceiveValue(null);
                     mFilePathCallback = filePathCallback;
 
@@ -438,117 +256,50 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
                     contentSelectionIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                     contentSelectionIntent.setType("*/*");
 
-                    Intent[] intentArray = new Intent[0];
-
                     Intent chooserIntent = new Intent(Intent.ACTION_CHOOSER);
                     chooserIntent.putExtra(Intent.EXTRA_INTENT, contentSelectionIntent);
-                    chooserIntent.putExtra(Intent.EXTRA_INITIAL_INTENTS, intentArray);
 
                     startActivityForResult(Intent.createChooser(chooserIntent, "Select content"), REQUEST_FILE_PICKER);
-
                     return true;
                 }
-
-                private Intent getChooserIntent() {
-                    Intent contentSelectionIntent = new Intent(Intent.ACTION_GET_CONTENT);
-                    contentSelectionIntent.addCategory(Intent.CATEGORY_OPENABLE);
-                    contentSelectionIntent.setType("*/*");
-
-                    return contentSelectionIntent;
-                }
-
-                /**
-                 * @param request the PermissionRequest from current web content.
-                 */
-                @Override
-                public void onPermissionRequest(final PermissionRequest request) {
-                    final String[] requestedResources = request.getResources();
-                    for (String r : requestedResources) {
-                        if ((r.equals(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) || (r.equals(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) || r.equals(PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID)) {
-                            request.grant(requestedResources);
+                @Override public void onPermissionRequest(final PermissionRequest request) {
+                    final String[] res = request.getResources();
+                    for (String r : res) {
+                        if (r.equals(PermissionRequest.RESOURCE_VIDEO_CAPTURE)
+                                || r.equals(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
+                                || r.equals(PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID)) {
+                            request.grant(res);
                             break;
                         }
                     }
                 }
             });
-            mWebView.setDownloadListener(new DownloadListener() {
-                /**
-                 * <a href="https://gist.github.com/miktam/107a414ec43de181b481">...</a>
-                 * <a href="https://teratail.com/questions/115988">...</a>
-                 * <a href="https://www.baeldung.com/java-mime-type-file-extension">...</a>
-                 *
-                 * @param url                The full url to the content that should be downloaded
-                 * @param userAgent          the user agent to be used for the download.
-                 * @param contentDisposition Content-disposition http header, if
-                 *                           present.
-                 * @param mimetype           The mimetype of the content reported by the server
-                 * @param contentLength      The file size reported by the server
-                 */
-                public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
-                    Download.Request request = new Download.Request(url, userAgent, contentDisposition, mimetype);
-                    EventCallback.Message message = new EventCallback.Message(EventCallback.Type.OnDownload, request.marshall());
-                    mUnityPostMessageQueue.add(message);
-                }
-            });
-            mWebView.setOnScrollChangeListener(new View.OnScrollChangeListener() {
-                /**
-                 * @param v    The view whose scroll position has changed.
-                 * @param x    Current horizontal scroll origin.
-                 * @param y    Current vertical scroll origin.
-                 * @param oldX Previous horizontal scroll origin.
-                 * @param oldY Previous vertical scroll origin.
-                 */
-                @Override
-                public void onScrollChange(View v, int x, int y, int oldX, int oldY) {
-                    mScrollState.update(x, y);
-                }
-            });
 
-            // create download complete event receiver.
-            mOnDownloadComplete = new BroadcastReceiver() {
-                /**
-                 * @param context The Context in which the receiver is running.
-                 * @param intent  The Intent being received.
-                 */
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    long downloadedID = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
-                    DownloadManager dm = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
-                    Uri uri = dm.getUriForDownloadedFile(downloadedID);
+            mWebView.setOnScrollChangeListener((v, x, y, oldX, oldY) -> mScrollState.update(x, y));
 
-                    mUnityPostMessageQueue.add(new EventCallback.Message(EventCallback.Type.OnDownloadFinish, new Download.EventInfo(downloadedID, uri.toString()).marshall()));
-                }
-            };
-            a.registerReceiver(mOnDownloadComplete, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_EXPORTED);
-
+            // --- Basic WebView config (unchanged) ---
             mWebView.setInitialScale(100);
             mWebView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
-            // --------- drawing cache setting
             mWebView.clearCache(true);
-            // ---------
             mWebView.setLongClickable(false);
             mWebView.setVisibility(View.VISIBLE);
             mWebView.setVerticalScrollBarEnabled(true);
             mWebView.setBackgroundColor(0x00000000);
             mWebView.addJavascriptInterface(new JSInterface(), "tlab");
+
             WebSettings webSettings = mWebView.getSettings();
             webSettings.setLoadWithOverviewMode(true);
-            // --------- enable cache
             webSettings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
-            //webSettings.setAppCacheEnabled(true); // deprecated in API level 33.
-            // ---------
             webSettings.setUseWideViewPort(true);
             webSettings.setSupportZoom(true);
-            webSettings.setSupportMultipleWindows(true);    // add
+            webSettings.setSupportMultipleWindows(true);
             webSettings.setBuiltInZoomControls(false);
             webSettings.setDisplayZoomControls(true);
             webSettings.setJavaScriptEnabled(true);
-            // --------- // fix file access
             webSettings.setAllowContentAccess(true);
             webSettings.setAllowFileAccess(true);
             webSettings.setAllowFileAccessFromFileURLs(true);
             webSettings.setAllowUniversalAccessFromFileURLs(true);
-            // ---------
             webSettings.setMediaPlaybackRequiresUserGesture(false);
             if (mSessionState.userAgent != null && !mSessionState.userAgent.isEmpty()) {
                 webSettings.setUserAgentString(mSessionState.userAgent);
@@ -557,7 +308,8 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             webSettings.setDatabaseEnabled(true);
             webSettings.setDomStorageEnabled(true);
 
-            mCaptureLayout.addView(mWebView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            mCaptureLayout.addView(mWebView, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
             if (mSessionState.loadUrl != null) LoadUrl(mSessionState.loadUrl);
 
@@ -567,67 +319,37 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
 
     private void showHttpAuthDialog(final HttpAuthHandler handler, final String host, final String realm) {
         final Activity a = UnityPlayer.currentActivity;
-        final android.app.AlertDialog.Builder mHttpAuthDialog = new android.app.AlertDialog.Builder(a);
+        final android.app.AlertDialog.Builder dialog = new android.app.AlertDialog.Builder(a);
         LinearLayout layout = new LinearLayout(a);
 
-        mHttpAuthDialog.setTitle("Enter the password").setCancelable(false);
-        final EditText etUserName = new EditText(a);
-        etUserName.setWidth(100);
-        layout.addView(etUserName);
-        final EditText etUserPass = new EditText(a);
-        etUserPass.setWidth(100);
-        layout.addView(etUserPass);
-        mHttpAuthDialog.setView(layout);
+        dialog.setTitle("Enter the password").setCancelable(false);
+        final EditText etUserName = new EditText(a); etUserName.setWidth(100); layout.addView(etUserName);
+        final EditText etUserPass = new EditText(a); etUserPass.setWidth(100); layout.addView(etUserPass);
+        dialog.setView(layout);
 
-        mHttpAuthDialog.setPositiveButton("OK", (dialog, whichButton) -> {
+        dialog.setPositiveButton("OK", (d, w) -> {
             String userName = etUserName.getText().toString();
             String userPass = etUserPass.getText().toString();
             mWebView.setHttpAuthUsernamePassword(host, realm, userName, userPass);
             handler.proceed(userName, userPass);
-            //mHttpAuthDialog = null;
         });
-        mHttpAuthDialog.setNegativeButton("Cancel", (dialog, whichButton) -> {
-            handler.cancel();
-            //mHttpAuthDialog = null;
-        });
-        mHttpAuthDialog.create().show();
+        dialog.setNegativeButton("Cancel", (d, w) -> handler.cancel());
+        dialog.create().show();
     }
-
-    /**
-     *
-     * @param requestCode The integer request code originally supplied to
-     *                    startActivityForResult(), allowing you to identify who this
-     *                    result came from.
-     * @param resultCode The integer result code returned by the child activity
-     *                   through its setResult().
-     * @param data An Intent, which can return result data to the caller
-     *               (various data can be attached to Intent "extras").
-     */
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode != REQUEST_FILE_PICKER || mFilePathCallback == null) {
             super.onActivityResult(requestCode, resultCode, data);
             return;
         }
-
         Uri[] results = null;
-
         if (resultCode == Activity.RESULT_OK) {
             String dataString = data.getDataString();
-            if (dataString != null) {
-                results = new Uri[]{Uri.parse(dataString)};
-            }
+            if (dataString != null) results = new Uri[]{ Uri.parse(dataString) };
         }
-
         mFilePathCallback.onReceiveValue(results);
         mFilePathCallback = null;
     }
-
-    /**
-     * I need to call this function on unity's render thread because
-     * releaseSharedTexture() call GLES or Vulkan function and it
-     * needs to be called on render thread.
-     */
     @Override
     public void Dispose() {
         ReleaseSharedTexture();
@@ -644,17 +366,11 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             mWebView = null;
             mView = null;
 
-            a.unregisterReceiver(mOnDownloadComplete);
             a.getFragmentManager().beginTransaction().remove(self).commitAllowingStateLoss();
 
             mDisposed = true;
         });
     }
-
-    /**
-     * Asynchronously evaluates JavaScript in the context of the currently displayed page.
-     * @param js javascript
-     */
     public void EvaluateJS(String js) {
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
@@ -662,86 +378,13 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             mWebView.evaluateJavascript("(function(){" + js + "})();", null);
         });
     }
-
-    /**
-     * Asynchronously evaluates JavaScript in the context of the currently displayed page.
-     * The javascript executed from this function should send the result of the execution
-     * to the result queue using the result Id passed as argument.
-     * @param varNameOfResultId Variable name to store Result Id
-     * @param js javascript
-     * @return Result Id (identifier on result queue
-     */
     public int EvaluateJSForResult(String varNameOfResultId, String js) {
         int id = mAsyncResult.request();
         if (id == -1) return -1;
         EvaluateJS(Common.JSUtil.toVariable(varNameOfResultId, id) + js);
         return id;
     }
-
-    /**
-     * Start download event.
-     * Supported URL schemes include (https, http, data, blob)
-     * @param url                The full url to the content that should be downloaded
-     * @param userAgent          The user agent to be used for the download
-     * @param contentDisposition Content-disposition http header, if present
-     * @param mimetype           The mimetype of the content reported by the server
-     */
-    public void DownloadFromUrl(String url, String userAgent, String contentDisposition, String mimetype) {
-        if (url.startsWith("https://") || url.startsWith("http://")) {
-            DownloadSupport support = new DownloadSupport(mDownloadOption, mDownloadProgress::put, mUnityPostMessageQueue);
-            support.fetchFromDownloadManager(url, userAgent, contentDisposition, mimetype);
-        } else if (url.startsWith("data:")) { // data url scheme
-            // write base64 data to file stream
-            DownloadSupport support = new DownloadSupport(mDownloadOption, mDownloadProgress::put, mUnityPostMessageQueue);
-            support.fetchFromDataUrl(url, contentDisposition, mimetype);
-        } else if (url.startsWith("blob:")) { // blob url scheme
-            // get base64 from blob url and write to file stream
-            //@formatter:off
-            String js = JSUtil.toVariable("url", url) + JSUtil.toVariable("mimetype", mimetype) + JSUtil.toVariable("contentDisposition", contentDisposition) +
-                    "function writeBuffer(buffer, bufferId, segmentSize, offset)\n" +
-                    "{\n" +
-                    "    if (segmentSize === 0) return;\n" +
-                    "    var i = offset;\n" +
-                    "    while(i + segmentSize <= buffer.length)\n" +
-                    "    {\n" +
-                    "       window.tlab._write(bufferId, buffer.slice(i, i + segmentSize));\n" +
-                    "       i += segmentSize\n" +
-                    "    }\n" +
-                    "    writeBuffer(buffer, bufferId, parseInt(segmentSize / 2), i);\n" +
-                    "}\n" +
-                    "var xhr = new XMLHttpRequest();\n" +
-                    "xhr.open(\"GET\", url, true);\n" +
-                    "xhr.setRequestHeader(\"Content-type\", mimetype + \";charset=UTF-8\");\n" +
-                    "xhr.responseType = \"blob\";\n" +
-                    "xhr.onload = function(e) {\n" +
-                    "    if (this.status == 200) {\n" +
-                    "        var blobFile = this.response;\n" +
-                    "        var reader = new FileReader();\n" +
-                    "        reader.readAsDataURL(blobFile);\n" +
-                    "        reader.onloadend = function() {\n" +
-                    "            base64data = reader.result;\n" +
-                    "            bufferId = url;\n" +
-                    "            buffer = new TextEncoder().encode(base64data);\n" +
-                    "            window.tlab._malloc(bufferId, buffer.length);\n" +
-                    "            writeBuffer(buffer, bufferId, 500000, 0);\n" +
-                    "            window.tlab.fetchBlob(url, contentDisposition, mimetype);\n" +
-                    "        }\n" +
-                    "    }\n" +
-                    "};\n" +
-                    "xhr.send();";
-            //@formatter:on
-
-            EvaluateJS(js);
-        }
-    }
-
-    /**
-     * Change the user agent used
-     * @param ua     UserAgent string
-     * @param reload If true, reload web page when userAgent is updated.
-     */
     public void SetUserAgent(final String ua, final boolean reload) {
-        // https://developer.mozilla.org/ja/docs/Web/HTTP/Headers/User-Agent/Firefox
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
             if (mWebView == null) return;
@@ -754,14 +397,6 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         });
         mSessionState.userAgent = ua;
     }
-
-    /**
-     * Get the currently used user agent.
-     * The user agent retrieval must be performed on the Java plugin's UI thread,
-     * so it will not be performed synchronously when called from Unity.
-     * Therefore, the result Id is returned from this function.
-     * @return Result Id
-     */
     public int GetUserAgent() {
         int id = mAsyncResult.request();
         if (id == -1) return -1;
@@ -773,20 +408,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         });
         return id;
     }
-
-    /**
-     * Get the currently loaded URL
-     * @return Get the currently loaded URL
-     */
-    public String GetUrl() {
-        return mSessionState.actualUrl;
-    }
-
-    /**
-     * Loads the given URL.
-     * Also see compatibility note on EvaluateJavascript(String).
-     * @param url The URL of the resource to load.
-     */
+    public String GetUrl() { return mSessionState.actualUrl; }
     public void LoadUrl(String url) {
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
@@ -794,9 +416,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
 
             if (mIntentFilters != null) {
                 for (String intentFilter : mIntentFilters) {
-                    Pattern pattern = Pattern.compile(intentFilter);
-                    Matcher matcher = pattern.matcher(url);
-                    if (matcher.matches()) {
+                    if (Pattern.compile(intentFilter).matcher(url).matches()) {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                         mWebView.getContext().startActivity(intent);
                         mSessionState.loadUrl = url;
@@ -812,133 +432,57 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             mWebView.loadUrl(mSessionState.loadUrl);
         });
     }
+    public void RefreshPage() {
+        final Activity a = UnityPlayer.currentActivity;
+        a.runOnUiThread(() -> {
+            if (mWebView == null) return;
 
-    /**
-     * Goes back in the history of this WebView.
-     */
+            mWebView.reload();
+        });
+    }
     public void GoBack() {
         final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null || !mPageGoState.canGoBack) return;
-            mWebView.goBack();
-        });
+        a.runOnUiThread(() -> { if (mWebView != null && mPageGoState.canGoBack) mWebView.goBack(); });
     }
-
-    /**
-     * Goes forward in the history of this WebView.
-     */
     public void GoForward() {
         final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null || !mPageGoState.canGoForward) return;
-            mWebView.goForward();
-        });
+        a.runOnUiThread(() -> { if (mWebView != null && mPageGoState.canGoForward) mWebView.goForward(); });
     }
-
-    /**
-     * Retrieve buffers that allocated in order to map javascript buffer to java.
-     *
-     * @param id Name of buffers that allocated in order to map javascript buffer to java
-     * @return current buffer value
-     */
     public byte[] GetJSBuffer(String id) {
         if (mJSPublicBuffer.containsKey(id)) {
             ByteBuffer buf = mJSPublicBuffer.get(id);
-            assert buf != null;
-            return buf.array();
+            return (buf != null) ? buf.array() : null;
         }
         return null;
     }
-
-    /**
-     * Loads the given data into this WebView, using baseUrl as the base URL for the content.
-     * The base URL is used both to resolve relative URLs and when applying JavaScript's same origin policy.
-     * @param html A String of data in the given encoding This value cannot be null.
-     * @param baseURL The URL to use as the page's base URL. If null defaults to 'about:blank'.
-     */
     public void LoadHtml(final String html, final String baseURL) {
         final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
-            mWebView.loadDataWithBaseURL(baseURL, html, "text/html", "UTF8", null);
-        });
+        a.runOnUiThread(() -> { if (mWebView != null) mWebView.loadDataWithBaseURL(baseURL, html, "text/html", "UTF8", null); });
     }
-
-    /**
-     * Scrolls the contents of this WebView up by half the view size.
-     *
-     * @param top True to jump to the top of the page
-     */
     public void PageUp(boolean top) {
         final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
-            mWebView.pageUp(top);
-        });
+        a.runOnUiThread(() -> { if (mWebView != null) mWebView.pageUp(top); });
     }
-
-    /**
-     * Scrolls the contents of this WebView down by half the page size.
-     *
-     * @param bottom True to jump to bottom of page
-     */
     public void PageDown(boolean bottom) {
         final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
-            mWebView.pageDown(bottom);
-        });
+        a.runOnUiThread(() -> { if (mWebView != null) mWebView.pageDown(bottom); });
     }
-
-    /**
-     * Clear WebView Cache.
-     *
-     * @param includeDiskFiles If false, only the RAM cache will be cleared.
-     */
     public void ClearCash(boolean includeDiskFiles) {
         final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
-            mWebView.clearCache(includeDiskFiles);
-        });
+        a.runOnUiThread(() -> { if (mWebView != null) mWebView.clearCache(includeDiskFiles); });
     }
-
-    /**
-     * Clear WebView History.
-     */
     public void ClearHistory() {
         final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
-            mWebView.clearHistory();
-        });
+        a.runOnUiThread(() -> { if (mWebView != null) mWebView.clearHistory(); });
     }
-
-    /**
-     * Performs zoom in in this WebView.
-     */
     public void ZoomIn() {
         final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
-            mWebView.zoomIn();
-        });
+        a.runOnUiThread(() -> { if (mWebView != null) mWebView.zoomIn(); });
     }
-
-    /**
-     * Performs zoom out in this WebView.
-     */
     public void zoomOut() {
         final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
-            mWebView.zoomOut();
-        });
+        a.runOnUiThread(() -> { if (mWebView != null) mWebView.zoomOut(); });
     }
-
-    /**
-     * Clear WebView Cookie.
-     */
     public void ClearCookie() {
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {

@@ -10,16 +10,6 @@ public interface IBrowser {
     void EvaluateJS(String js);
 
     /**
-     * Request file download to Download Manager.
-     *
-     * @param url                The full url to the content that should be downloaded
-     * @param userAgent          The user agent to be used for the download
-     * @param contentDisposition Content-disposition http header, if present
-     * @param mimetype           The mimetype of the content reported by the server
-     */
-    void DownloadFromUrl(String url, String userAgent, String contentDisposition, String mimetype);
-
-    /**
      * Update userAgent with the given userAgent string.
      *
      * @param ua     UserAgent string
@@ -45,6 +35,12 @@ public interface IBrowser {
      * @param url The URL of the resource to load.
      */
     void LoadUrl(String url);
+
+    /**
+     * Refreshes the current page.
+     *
+     */
+    void RefreshPage();
 
     /**
      * Goes back in the history of this WebView.
