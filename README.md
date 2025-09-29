@@ -52,3 +52,30 @@ public Canvas onDrawViewBegin() {
 ## Link
 - [OpenGL Texture to HardwareBuffer](https://github.com/keith2018/SharedTexture)
 - [WebView to ByteBuffer](https://bitbucket.org/HoshiyamaTakaaki/pixelreadstest/src/master/)
+
+## Troubleshooting DNS lookups inside the embedded WebView
+
+When a page load fails with `net::ERR_NAME_NOT_RESOLVED` even though `nslookup`
+or `dig` succeed on the same device, the WebView process is typically using a
+different resolver than the system shell. In environments that rely on custom
+DNS (for example, a Pi-hole responder that is reachable only through a
+Tailscale VPN), double-check the following:
+
+1. **Ensure the device actually routes DNS through the tailnet.** Private DNS / DoT
+   settings override the resolver that the VPN advertises. Set *Settings → Network &
+   Internet → Private DNS* to `Off` or `Automatic`, then reconnect to Tailscale so
+   that the Pi-hole’s `100.x.y.z` address is pushed down to the client.
+2. **Return an address that the device can reach.** Pi-hole must answer with the
+   service’s Tailscale IP, not an RFC1918 LAN address that the mobile device cannot
+   route to from outside your home network.
+3. **Expose an IPv4 endpoint for the reverse proxy.** Some Android builds still lack
+   full IPv6 support over Tailscale. If Pi-hole responds with only a ULA (`fd7a:…`)
+   address the WebView will fail the lookup. Add a `100.64.x.x` record (or another
+   routable IPv4) alongside the IPv6 answer.
+4. **Disable third-party “Secure DNS” in Chromium-based browsers on the device.**
+   Chrome/Edge’s DoH implementation bypasses Tailscale DNS entirely unless it is set
+   to “Use current service provider”.
+
+The plugin now logs the active DNS servers whenever the WebView encounters a host
+lookup error. Capture `adb logcat` output while reproducing the issue to confirm that
+the Pi-hole resolver is visible to the WebView process.
