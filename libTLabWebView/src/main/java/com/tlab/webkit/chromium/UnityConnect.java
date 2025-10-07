@@ -23,6 +23,7 @@ import android.view.MotionEvent;
 import android.view.PointerIcon;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
@@ -51,19 +52,89 @@ import java.nio.ByteBuffer;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class UnityConnect extends OffscreenBrowser implements IBrowser {
     private WebView mWebView;
     private View mVideoView;
-    private ValueCallback<Uri[]> mFilePathCallback;
 
     private final Map<String, ByteBuffer> mJSPrivateBuffer = new Hashtable<>();
     private final Map<String, ByteBuffer> mJSPublicBuffer = new Hashtable<>();
 
     private static final String TAG = "AreDesk (Chromium)";
+
+    private void runOnActivityThread(String failureMessage, Consumer<Activity> task) {
+        Activity activity = UnityPlayer.currentActivity;
+        if (activity == null) {
+            Log.w(TAG, failureMessage);
+            return;
+        }
+        activity.runOnUiThread(() -> task.accept(activity));
+    }
+
+    private void runOnActivityThread(Consumer<Activity> task) {
+        runOnActivityThread("Unity activity is not available; ignoring request", task);
+    }
+
+    private void withWebView(Consumer<WebView> task) {
+        runOnActivityThread(activity -> {
+            WebView webView = mWebView;
+            if (webView == null) {
+                Log.w(TAG, "WebView is not initialized; ignoring request");
+                return;
+            }
+            task.accept(webView);
+        });
+    }
+
+    private void disposeOnUiThread() {
+        WebView webView = mWebView;
+        if (webView == null) {
+            mDisposed = true;
+            return;
+        }
+
+        abortCaptureThread();
+
+        webView.stopLoading();
+        if (mVideoView != null) {
+            webView.removeView(mVideoView);
+        }
+        mVideoView = null;
+        webView.destroy();
+        mWebView = null;
+        mView = null;
+
+        if (mCaptureLayout != null) {
+            mCaptureLayout.removeAllViews();
+        }
+        if (mRootLayout != null) {
+            ViewParent parent = mRootLayout.getParent();
+            if (parent instanceof ViewGroup) {
+                ((ViewGroup) parent).removeView(mRootLayout);
+            }
+            mRootLayout = null;
+        }
+        mCaptureLayout = null;
+        mGlSurfaceView = null;
+
+        mDisposed = true;
+    }
+
+    private void disposeWithoutActivity() {
+        if (mCaptureLayout != null) {
+            mCaptureLayout.removeAllViews();
+        }
+        mWebView = null;
+        mView = null;
+        mRootLayout = null;
+        mCaptureLayout = null;
+        mGlSurfaceView = null;
+        mVideoView = null;
+        mDisposed = true;
+    }
 
     public class JSInterface {
         @JavascriptInterface
@@ -145,19 +216,12 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
 
         mSessionState.loadUrl = url;
 
-        final UnityConnect self = this;
-
-        setRetainInstance(true);
-
-        final Activity a = UnityPlayer.currentActivity;
-        a.getFragmentManager().beginTransaction().add(0, self).commitAllowingStateLoss();
-
-        a.runOnUiThread(() -> {
+        runOnActivityThread("Unity activity is not available; cannot initialise browser", activity -> {
             initParam(webWidth, webHeight, texWidth, texHeight, screenWidth, screenHeight, isVulkan, OffscreenBrowser.CaptureMode.values()[captureMode]);
             init();
 
             if (mWebView == null) {
-                mWebView = new WebView(a);
+                mWebView = new WebView(activity);
                 mView = mWebView;
             }
 
@@ -274,18 +338,8 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
                     mVideoView = null;
                 }
                 @Override public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
-                    if (mFilePathCallback != null) mFilePathCallback.onReceiveValue(null);
-                    mFilePathCallback = filePathCallback;
-
-                    Intent contentSelectionIntent = new Intent(Intent.ACTION_GET_CONTENT);
-                    contentSelectionIntent.addCategory(Intent.CATEGORY_OPENABLE);
-                    contentSelectionIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-                    contentSelectionIntent.setType("*/*");
-
-                    Intent chooserIntent = new Intent(Intent.ACTION_CHOOSER);
-                    chooserIntent.putExtra(Intent.EXTRA_INTENT, contentSelectionIntent);
-
-                    startActivityForResult(Intent.createChooser(chooserIntent, "Select content"), REQUEST_FILE_PICKER);
+                    Log.i(TAG, "File chooser requested but disabled for this build; reporting no selection");
+                    filePathCallback.onReceiveValue(null);
                     return true;
                 }
                 @Override public void onPermissionRequest(final PermissionRequest request) {
@@ -344,19 +398,28 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
     }
 
     private void showHttpAuthDialog(final HttpAuthHandler handler, final String host, final String realm) {
-        final Activity a = UnityPlayer.currentActivity;
-        final android.app.AlertDialog.Builder dialog = new android.app.AlertDialog.Builder(a);
-        LinearLayout layout = new LinearLayout(a);
+        Activity activity = UnityPlayer.currentActivity;
+        if (activity == null) {
+            Log.w(TAG, "Unable to show HTTP auth dialog: Unity activity was null");
+            handler.cancel();
+            return;
+        }
+
+        final android.app.AlertDialog.Builder dialog = new android.app.AlertDialog.Builder(activity);
+        LinearLayout layout = new LinearLayout(activity);
+        layout.setOrientation(LinearLayout.VERTICAL);
 
         dialog.setTitle("Enter the password").setCancelable(false);
-        final EditText etUserName = new EditText(a); etUserName.setWidth(100); layout.addView(etUserName);
-        final EditText etUserPass = new EditText(a); etUserPass.setWidth(100); layout.addView(etUserPass);
+        final EditText etUserName = new EditText(activity); etUserName.setWidth(100); layout.addView(etUserName);
+        final EditText etUserPass = new EditText(activity); etUserPass.setWidth(100); layout.addView(etUserPass);
         dialog.setView(layout);
 
         dialog.setPositiveButton("OK", (d, w) -> {
             String userName = etUserName.getText().toString();
             String userPass = etUserPass.getText().toString();
-            mWebView.setHttpAuthUsernamePassword(host, realm, userName, userPass);
+            if (mWebView != null) {
+                mWebView.setHttpAuthUsernamePassword(host, realm, userName, userPass);
+            }
             handler.proceed(userName, userPass);
         });
         dialog.setNegativeButton("Cancel", (d, w) -> handler.cancel());
@@ -424,45 +487,25 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         }
     }
     @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode != REQUEST_FILE_PICKER || mFilePathCallback == null) {
-            super.onActivityResult(requestCode, resultCode, data);
-            return;
-        }
-        Uri[] results = null;
-        if (resultCode == Activity.RESULT_OK) {
-            String dataString = data.getDataString();
-            if (dataString != null) results = new Uri[]{ Uri.parse(dataString) };
-        }
-        mFilePathCallback.onReceiveValue(results);
-        mFilePathCallback = null;
-    }
-    @Override
     public void Dispose() {
+        super.Dispose();
         ReleaseSharedTexture();
 
-        final Activity a = UnityPlayer.currentActivity;
-        final UnityConnect self = this;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
-            abortCaptureThread();
+        Activity activity = UnityPlayer.currentActivity;
+        if (activity == null) {
+            disposeWithoutActivity();
+            return;
+        }
 
-            mWebView.stopLoading();
-            if (mVideoView != null) mWebView.removeView(mVideoView);
-            mWebView.destroy();
-            mWebView = null;
-            mView = null;
-
-            a.getFragmentManager().beginTransaction().remove(self).commitAllowingStateLoss();
-
-            mDisposed = true;
-        });
+        activity.runOnUiThread(this::disposeOnUiThread);
     }
     public void EvaluateJS(String js) {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null || !mWebView.getSettings().getJavaScriptEnabled()) return;
-            mWebView.evaluateJavascript("(function(){" + js + "})();", null);
+        withWebView(webView -> {
+            if (!webView.getSettings().getJavaScriptEnabled()) {
+                Log.w(TAG, "JavaScript execution requested but disabled; ignoring call");
+                return;
+            }
+            webView.evaluateJavascript("(function(){" + js + "})();", null);
         });
     }
     public int EvaluateJSForResult(String varNameOfResultId, String js) {
@@ -472,14 +515,14 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         return id;
     }
     public void SetUserAgent(final String ua, final boolean reload) {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
+        withWebView(webView -> {
             try {
-                mWebView.getSettings().setUserAgentString(ua);
-                if (reload) mWebView.reload();
+                webView.getSettings().setUserAgentString(ua);
+                if (reload) {
+                    webView.reload();
+                }
             } catch (Exception e) {
-                Log.e(TAG, Objects.requireNonNull(e.getMessage()));
+                Log.e(TAG, "Failed to set custom user agent", e);
             }
         });
         mSessionState.userAgent = ua;
@@ -487,25 +530,29 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
     public int GetUserAgent() {
         int id = mAsyncResult.request();
         if (id == -1) return -1;
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
-            mSessionState.userAgent = mWebView.getSettings().getUserAgentString();
+        runOnActivityThread(activity -> {
+            WebView webView = mWebView;
+            if (webView == null) {
+                return;
+            }
+            mSessionState.userAgent = webView.getSettings().getUserAgentString();
             mAsyncResult.post(new AsyncResult(id, mSessionState.userAgent), AsyncResult.Status.COMPLETE);
         });
         return id;
     }
     public String GetUrl() { return mSessionState.actualUrl; }
     public void LoadUrl(String url) {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
+        runOnActivityThread(activity -> {
+            WebView webView = mWebView;
+            if (webView == null) {
+                return;
+            }
 
             if (mIntentFilters != null) {
                 for (String intentFilter : mIntentFilters) {
                     if (Pattern.compile(intentFilter).matcher(url).matches()) {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                        mWebView.getContext().startActivity(intent);
+                        webView.getContext().startActivity(intent);
                         mSessionState.loadUrl = url;
                         return;
                     }
@@ -516,24 +563,17 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
                 mSessionState.loadUrl = "http://" + url;
             else mSessionState.loadUrl = url;
 
-            mWebView.loadUrl(mSessionState.loadUrl);
+            webView.loadUrl(mSessionState.loadUrl);
         });
     }
     public void RefreshPage() {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
-
-            mWebView.reload();
-        });
+        withWebView(WebView::reload);
     }
     public void GoBack() {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> { if (mWebView != null && mPageGoState.canGoBack) mWebView.goBack(); });
+        withWebView(webView -> { if (mPageGoState.canGoBack) webView.goBack(); });
     }
     public void GoForward() {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> { if (mWebView != null && mPageGoState.canGoForward) mWebView.goForward(); });
+        withWebView(webView -> { if (mPageGoState.canGoForward) webView.goForward(); });
     }
     public byte[] GetJSBuffer(String id) {
         if (mJSPublicBuffer.containsKey(id)) {
@@ -543,39 +583,31 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         return null;
     }
     public void LoadHtml(final String html, final String baseURL) {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> { if (mWebView != null) mWebView.loadDataWithBaseURL(baseURL, html, "text/html", "UTF8", null); });
+        withWebView(webView -> webView.loadDataWithBaseURL(baseURL, html, "text/html", "UTF8", null));
     }
     public void PageUp(boolean top) {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> { if (mWebView != null) mWebView.pageUp(top); });
+        withWebView(webView -> webView.pageUp(top));
     }
     public void PageDown(boolean bottom) {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> { if (mWebView != null) mWebView.pageDown(bottom); });
+        withWebView(webView -> webView.pageDown(bottom));
     }
     public void ClearCash(boolean includeDiskFiles) {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> { if (mWebView != null) mWebView.clearCache(includeDiskFiles); });
+        withWebView(webView -> webView.clearCache(includeDiskFiles));
     }
     public void ClearHistory() {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> { if (mWebView != null) mWebView.clearHistory(); });
+        withWebView(WebView::clearHistory);
     }
     public void ZoomIn() {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> { if (mWebView != null) mWebView.zoomIn(); });
+        withWebView(webView -> webView.zoomIn());
     }
     public void zoomOut() {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> { if (mWebView != null) mWebView.zoomOut(); });
+        withWebView(webView -> webView.zoomOut());
     }
     public void ClearCookie() {
-        final Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            if (mWebView == null) return;
-            CookieManager.getInstance().removeAllCookies(null);
-            CookieManager.getInstance().flush();
+        withWebView(webView -> {
+            CookieManager cookieManager = CookieManager.getInstance();
+            cookieManager.removeAllCookies(null);
+            cookieManager.flush();
         });
     }
 }

@@ -7,6 +7,8 @@ import android.opengl.EGLContext;
 import android.opengl.GLES11Ext;
 import android.opengl.GLES30;
 import android.opengl.GLSurfaceView;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.Surface;
 
@@ -67,7 +69,7 @@ public class ViewToBufferRenderer implements GLSurfaceView.Renderer {
 
     protected boolean mInitialized;
 
-    protected boolean mFrameAvailable = false;
+    protected volatile boolean mFrameAvailable = false;
 
     public void initSamplerShader() {
         //@formatter:off
@@ -182,14 +184,8 @@ public class ViewToBufferRenderer implements GLSurfaceView.Renderer {
 
         mSurfaceTexture = new SurfaceTexture(mSurfaceTextureID[0]);
         mSurfaceTexture.setDefaultBufferSize(width, height);
-        mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
-            @Override
-            public void onFrameAvailable(SurfaceTexture surfaceTexture) {
-                synchronized (this) {
-                    mFrameAvailable = true;
-                }
-            }
-        });
+        Handler handler = new Handler(Looper.getMainLooper());
+        mSurfaceTexture.setOnFrameAvailableListener(surfaceTexture -> mFrameAvailable = true, handler);
         mSurface = new Surface(mSurfaceTexture);
     }
 
