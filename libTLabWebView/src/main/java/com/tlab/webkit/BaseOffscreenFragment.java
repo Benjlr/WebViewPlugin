@@ -155,6 +155,7 @@ public abstract class BaseOffscreenFragment {
         if (mViewToBufferRenderer != null) {
             mResState.tex.update(texWidth, texHeight);
             mViewToBufferRenderer.setTextureResolution(mResState.tex.x, mResState.tex.y);
+            mViewToBufferRenderer.requestResizeTex();
             mViewToBufferRenderer.disable();
         }
 
@@ -165,7 +166,7 @@ public abstract class BaseOffscreenFragment {
             updateRootLayoutSize(mResState.view.x, mResState.view.y);
         });
     }
-
+//
     public void ResizeTex(int texWidth, int texHeight) {
         if (mViewToBufferRenderer != null) {
             mResState.tex.update(texWidth, texHeight);
