@@ -1,11 +1,13 @@
 package com.tlab.webkit;
 
 import android.app.Activity;
-import android.app.Fragment;
 import android.hardware.HardwareBuffer;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.RelativeLayout;
 
@@ -17,7 +19,10 @@ import com.tlab.viewtobuffer.ViewToHWBRenderer;
 import com.tlab.viewtobuffer.ViewToPBORenderer;
 import com.unity3d.player.UnityPlayer;
 
-public abstract class BaseOffscreenFragment extends Fragment {
+import java.lang.ref.WeakReference;
+import java.util.concurrent.atomic.AtomicReference;
+
+public abstract class BaseOffscreenFragment {
 
     private static final String TAG = "BaseOffscreenFragment";
     public enum CaptureMode {
@@ -31,41 +36,33 @@ public abstract class BaseOffscreenFragment extends Fragment {
     protected boolean mIsVulkan;
     protected SharedTexture mSharedTexture;
     protected HardwareBuffer mSharedBuffer;
-    protected boolean mCaptureThreadKeepAlive = true;
+    protected boolean mCaptureThreadKeepAlive = false;
     protected final Object mCaptureThreadMutex = new Object();
     protected int mFps = 30;
     public boolean mInitialized = false;
     public boolean mDisposed = false;
     protected boolean mIsSharedBufferExchanged = true;
 
-    @Override
-    public void onPause() {
-        super.onPause();
-        /// 18-09-25 Moved below to onDetach to see if it prevents tear down on multi resume
-//        if ((mCaptureMode != CaptureMode.Surface) && (mViewToBufferRenderer != null))
-//            mViewToBufferRenderer.disable();
-//        else if (mCaptureMode == CaptureMode.Surface) RemoveSurface();
+    private final Handler mFrameHandler = new Handler(Looper.getMainLooper());
+    private final AtomicReference<WeakReference<View>> mFrameTarget = new AtomicReference<>(new WeakReference<>(null));
+    private final Runnable mFrameInvalidationRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!mCaptureThreadKeepAlive) {
+                mFrameTarget.set(new WeakReference<>(null));
+                return;
+            }
 
-    }
+            View target = mFrameTarget.get().get();
+            if (target == null || !target.isShown()) {
+                mFrameHandler.postDelayed(this, frameDelayMillis());
+                return;
+            }
 
-    @Override
-    public void onResume() {
-        super.onResume();
-    }
-
-    @Override
-    public void onStop() {
-        super.onStop();
-    }
-
-    @Override
-    public void onDetach() {
-        super.onDetach();
-        if ((mCaptureMode != CaptureMode.Surface) && (mViewToBufferRenderer != null))
-            mViewToBufferRenderer.disable();
-        else if (mCaptureMode == CaptureMode.Surface) RemoveSurface();
-
-    }
+            target.postInvalidateOnAnimation();
+            mFrameHandler.postDelayed(this, frameDelayMillis());
+        }
+    };
 
     public void initParam(int viewWidth, int viewHeight, int texWidth, int texHeight, int screenWidth, int screenHeight, boolean isVulkan, CaptureMode captureMode) {
         mResState.view.update(viewWidth, viewHeight);
@@ -76,9 +73,7 @@ public abstract class BaseOffscreenFragment extends Fragment {
     }
 
     public void abortCaptureThread() {
-        synchronized (mCaptureThreadMutex) {
-            mCaptureThreadKeepAlive = false;
-        }
+        stopFrameInvalidation();
     }
 
     public void ReleaseSharedTexture() {
@@ -87,6 +82,10 @@ public abstract class BaseOffscreenFragment extends Fragment {
         if (mSharedTexture != null) {
             mSharedTexture.release();
             mSharedTexture = null;
+        }
+        if (mSharedBuffer != null) {
+            mSharedBuffer.close();
+            mSharedBuffer = null;
         }
         //Log.i(TAG, "release (end)");
     }
@@ -128,6 +127,7 @@ public abstract class BaseOffscreenFragment extends Fragment {
 
     public void SetFps(int fps) {
         mFps = fps;
+        restartFrameInvalidationIfNeeded();
     }
 
     /**
@@ -155,17 +155,14 @@ public abstract class BaseOffscreenFragment extends Fragment {
         if (mViewToBufferRenderer != null) {
             mResState.tex.update(texWidth, texHeight);
             mViewToBufferRenderer.setTextureResolution(mResState.tex.x, mResState.tex.y);
-            mViewToBufferRenderer.requestResizeTex();
             mViewToBufferRenderer.disable();
         }
 
         Activity a = UnityPlayer.currentActivity;
+        if (a == null) return;
         a.runOnUiThread(() -> {
             mResState.view.update(viewWidth, viewHeight);
-            ViewGroup.LayoutParams layoutParams = mRootLayout.getLayoutParams();
-            layoutParams.width = mResState.view.x;
-            layoutParams.height = mResState.view.y;
-            mRootLayout.setLayoutParams(layoutParams);
+            updateRootLayoutSize(mResState.view.x, mResState.view.y);
         });
     }
 //
@@ -181,12 +178,10 @@ public abstract class BaseOffscreenFragment extends Fragment {
         if (mViewToBufferRenderer != null) mViewToBufferRenderer.disable();
 
         Activity a = UnityPlayer.currentActivity;
+        if (a == null) return;
         a.runOnUiThread(() -> {
             mResState.view.update(viewWidth, viewHeight);
-            ViewGroup.LayoutParams layoutParams = mRootLayout.getLayoutParams();
-            layoutParams.width = mResState.view.x;
-            layoutParams.height = mResState.view.y;
-            mRootLayout.setLayoutParams(layoutParams);
+            updateRootLayoutSize(mResState.view.x, mResState.view.y);
         });
     }
 
@@ -217,16 +212,61 @@ public abstract class BaseOffscreenFragment extends Fragment {
             });
             a.addContentView(surfaceView, new RelativeLayout.LayoutParams(mResState.view.x, mResState.view.y));
 
-            new Thread(() -> {
-                while (true) {
-                    try {
-                        Thread.sleep(1000 / mFps);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
+            Handler handler = new Handler(Looper.getMainLooper());
+            Runnable pump = new Runnable() {
+                @Override
+                public void run() {
+                    if (mDisposed || !surfaceView.isAttachedToWindow()) {
+                        return;
                     }
-                    surfaceView.postInvalidate();
+                    surfaceView.postInvalidateOnAnimation();
+                    handler.postDelayed(this, frameDelayMillis());
                 }
-            }).start();
+            };
+            handler.post(pump);
         });
+    }
+
+    protected void startFrameInvalidation(@NonNull View target) {
+        synchronized (mCaptureThreadMutex) {
+            mCaptureThreadKeepAlive = true;
+            mFrameTarget.set(new WeakReference<>(target));
+            mFrameHandler.removeCallbacks(mFrameInvalidationRunnable);
+            mFrameHandler.post(mFrameInvalidationRunnable);
+        }
+    }
+
+    protected void stopFrameInvalidation() {
+        synchronized (mCaptureThreadMutex) {
+            mCaptureThreadKeepAlive = false;
+            mFrameHandler.removeCallbacks(mFrameInvalidationRunnable);
+            mFrameTarget.set(new WeakReference<>(null));
+        }
+    }
+
+    private long frameDelayMillis() {
+        return 1000L / Math.max(1, mFps);
+    }
+
+    private void restartFrameInvalidationIfNeeded() {
+        if (!mCaptureThreadKeepAlive) {
+            return;
+        }
+        mFrameHandler.removeCallbacks(mFrameInvalidationRunnable);
+        mFrameHandler.post(mFrameInvalidationRunnable);
+    }
+
+    private void updateRootLayoutSize(int width, int height) {
+        if (mRootLayout == null) {
+            return;
+        }
+        ViewGroup.LayoutParams layoutParams = mRootLayout.getLayoutParams();
+        if (layoutParams == null) {
+            layoutParams = new RelativeLayout.LayoutParams(width, height);
+        } else {
+            layoutParams.width = width;
+            layoutParams.height = height;
+        }
+        mRootLayout.setLayoutParams(layoutParams);
     }
 }

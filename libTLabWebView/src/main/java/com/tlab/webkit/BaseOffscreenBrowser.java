@@ -28,10 +28,6 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment
     protected int  mMouseButtonState = 0; // MotionEvent.BUTTON_* bitfield
     protected long mMouseDownTime    = 0L;
 
-    public static final int REQUEST_FILE_PICKER = 1;
-    public static final int REQUEST_PERMISSIONS = 2;
-    public static final int REQUEST_WRITE_EXTERNAL_STORAGE = 3;
-
     protected final Queue<Common.EventCallback.Message> mUnityPostMessageQueue = new ArrayDeque<>();
     protected final Common.AsyncResult.Manager mAsyncResult = new Common.AsyncResult.Manager();
     protected final Common.SessionState mSessionState = new Common.SessionState();

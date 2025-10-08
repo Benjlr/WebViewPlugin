@@ -6,7 +6,7 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 
 public final class BrowserMouseBridge {
-    public static final String MOUSE_BRIDGE_VERSION = "mb-2025-09-12-e"; // <- change on each build
+    public static final String MOUSE_BRIDGE_VERSION = "mb-2025-08-Oct-f"; // <- change on each build
     public static String getVersion() { return MOUSE_BRIDGE_VERSION; }
 
     private static BaseOffscreenBrowser sBrowser;

@@ -7,12 +7,12 @@ import android.view.Surface;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 
-import com.tlab.webkit.BaseOffscreenBrowser;
 import com.tlab.viewtobuffer.CustomGLSurfaceView;
 import com.tlab.viewtobuffer.ViewToBufferLayout;
 import com.tlab.viewtobuffer.ViewToHWBRenderer;
 import com.tlab.viewtobuffer.ViewToPBORenderer;
 import com.tlab.viewtobuffer.ViewToSurfaceLayout;
+import com.tlab.webkit.BaseOffscreenBrowser;
 import com.tlab.webkit.BrowserMouseBridge;
 import com.unity3d.player.UnityPlayer;
 
@@ -64,19 +64,7 @@ public class OffscreenBrowser extends BaseOffscreenBrowser {
             mRootLayout.addView(mCaptureLayout, new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT));
         }
         BrowserMouseBridge.setBrowser(this);
-
-        new Thread(() -> {
-            while (mCaptureThreadKeepAlive) {
-                try {
-                    Thread.sleep(1000 / mFps);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-                synchronized (mCaptureThreadMutex) {
-                    mCaptureLayout.postInvalidate();
-                }
-            }
-        }).start();
+        startFrameInvalidation(mCaptureLayout);
     }
 
     public void SetSurface(Object surfaceObj, int width, int height) {
@@ -92,6 +80,7 @@ public class OffscreenBrowser extends BaseOffscreenBrowser {
 
     @Override
     public void Dispose() {
-
+        stopFrameInvalidation();
+        BrowserMouseBridge.setBrowser(null);
     }
 }
