@@ -29,4 +29,5 @@ target_link_libraries(
         jnigraphics
         ${android-lib}
         ${log-lib}
+        c++_shared
 )

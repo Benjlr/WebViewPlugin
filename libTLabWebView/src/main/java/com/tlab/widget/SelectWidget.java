@@ -5,7 +5,6 @@ import com.tlab.util.Common;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.mozilla.geckoview.GeckoSession;
 
 import java.util.ArrayList;
 
@@ -49,16 +48,6 @@ public class SelectWidget {
         public boolean selected;
         public int type;
         public String label;
-        public final GeckoSession.PromptDelegate.ChoicePrompt.Choice choice;
-
-        public ModifiableChoice(GeckoSession.PromptDelegate.ChoicePrompt.Choice c) {
-            choice = c;
-            selected = c.selected;
-            type = Type.DEFAULT;
-            if (c.items != null) type = Type.GROUP;
-            if (c.separator) type = Type.SEPARATOR;
-            label = c.label;
-        }
 
         @Override
         public JSONObject toJSON() {
