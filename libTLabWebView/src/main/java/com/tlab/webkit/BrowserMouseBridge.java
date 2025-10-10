@@ -1,8 +1,11 @@
 package com.tlab.webkit;
 
+import android.os.Build;
 import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.MotionEvent;
+
+import java.lang.reflect.Method;
 
 public final class BrowserMouseBridge {
     public static final String MOUSE_BRIDGE_VERSION = "mb-2025-08-Oct-f"; // <- change on each build
@@ -57,6 +60,38 @@ public final class BrowserMouseBridge {
         sHasLastCoords = false;
     }
 
+    private static Method sSetActionButton;
+    private static boolean sTriedResolveActionButton = false;
+
+    private static void tryResolveActionButtonSetter() {
+        if (sTriedResolveActionButton) return;
+        sTriedResolveActionButton = true;
+
+        if (Build.VERSION.SDK_INT < 23) return;
+        try {
+            sSetActionButton = MotionEvent.class.getMethod("setActionButton", int.class);
+        } catch (NoSuchMethodException ignored) {
+            sSetActionButton = null;
+        }
+    }
+
+    private static void maybeSetActionButton(MotionEvent event, int action, int actionButton) {
+        if (actionButton == 0) return;
+        if (action != MotionEvent.ACTION_BUTTON_PRESS && action != MotionEvent.ACTION_BUTTON_RELEASE) return;
+
+        if (!sTriedResolveActionButton) {
+            tryResolveActionButtonSetter();
+        }
+
+        if (sSetActionButton != null) {
+            try {
+                sSetActionButton.invoke(event, actionButton);
+            } catch (Throwable ignored) {
+                // Reflection may fail on certain builds; in that case fall back without metadata.
+            }
+        }
+    }
+
     private static MotionEvent obtainMouseEvent(
             long downTime, long eventTime, int action,
             float x, float y, int buttonState, int actionButton /*0 if unknown*/,
@@ -86,10 +121,7 @@ public final class BrowserMouseBridge {
                 InputDevice.SOURCE_MOUSE, /*flags*/0
         );
 
-        // For ACTION_BUTTON_PRESS/RELEASE, set which button changed (API 23+)
-        if (actionButton != 0) {
-            ev.setActionButton(actionButton);
-        }
+        maybeSetActionButton(ev, action, actionButton);
         return ev;
     }
 
@@ -156,27 +188,36 @@ public final class BrowserMouseBridge {
         final int btn = normalizeMask(buttonMask);
         final boolean hadAnyButton = sButtonState != 0;
         final boolean primaryAlreadyDown = (sButtonState & MotionEvent.BUTTON_PRIMARY) != 0;
+        final boolean isPrimaryPress = (btn & MotionEvent.BUTTON_PRIMARY) != 0 && !primaryAlreadyDown;
 
         if (!hadAnyButton) {
             sDownTime = t;
         }
 
+        if (isPrimaryPress) {
+            sDownTime = t;
+        }
+
         final int newState = sButtonState | btn;
+        final boolean hadCoords = sHasLastCoords;
         final float relX = relativeX(x);
         final float relY = relativeY(y);
+        final Float relXValue = hadCoords ? Float.valueOf(relX) : null;
+        final Float relYValue = hadCoords ? Float.valueOf(relY) : null;
 
-        final boolean isPrimaryPress = (btn & MotionEvent.BUTTON_PRIMARY) != 0 && !primaryAlreadyDown;
+        final int action = isPrimaryPress ? MotionEvent.ACTION_DOWN : MotionEvent.ACTION_BUTTON_PRESS;
+        final int actionButton = isPrimaryPress ? 0 : btn;
 
         MotionEvent event = obtainMouseEvent(
                 sDownTime,
                 t,
-                isPrimaryPress ? MotionEvent.ACTION_DOWN : MotionEvent.ACTION_BUTTON_PRESS,
+                action,
                 x,
                 y,
                 newState,
-                btn,
-                Float.valueOf(relX),
-                Float.valueOf(relY)
+                actionButton,
+                relXValue,
+                relYValue
         );
         dispatch(event);
 
@@ -193,15 +234,14 @@ public final class BrowserMouseBridge {
 
         final boolean isPrimaryRelease = (btn & MotionEvent.BUTTON_PRIMARY) != 0 && wasPrimaryDown;
         final long downTime = (sDownTime != 0 ? sDownTime : t);
+        final boolean hadCoords = sHasLastCoords;
         final float relX = relativeX(x);
         final float relY = relativeY(y);
+        final Float relXValue = hadCoords ? Float.valueOf(relX) : null;
+        final Float relYValue = hadCoords ? Float.valueOf(relY) : null;
 
-        final int action;
-        if (isPrimaryRelease && newState == 0) {
-            action = MotionEvent.ACTION_UP;
-        } else {
-            action = MotionEvent.ACTION_BUTTON_RELEASE;
-        }
+        final int action = isPrimaryRelease ? MotionEvent.ACTION_UP : MotionEvent.ACTION_BUTTON_RELEASE;
+        final int actionButton = isPrimaryRelease ? 0 : btn;
 
         MotionEvent event = obtainMouseEvent(
                 downTime,
@@ -210,9 +250,9 @@ public final class BrowserMouseBridge {
                 x,
                 y,
                 newState,
-                btn,
-                Float.valueOf(relX),
-                Float.valueOf(relY)
+                actionButton,
+                relXValue,
+                relYValue
         );
         dispatch(event);
 
@@ -227,16 +267,19 @@ public final class BrowserMouseBridge {
         final long down = (sDownTime != 0 ? sDownTime : t);
         final boolean isDragging = sButtonState != 0;
         final int action = isDragging ? MotionEvent.ACTION_MOVE : MotionEvent.ACTION_HOVER_MOVE;
+        final boolean hadCoords = sHasLastCoords;
         final float relX = relativeX(x);
         final float relY = relativeY(y);
+        final Float relXValue = hadCoords ? Float.valueOf(relX) : null;
+        final Float relYValue = hadCoords ? Float.valueOf(relY) : null;
         MotionEvent ev;
         if (isDragging) {
             ev = obtainMouseEvent(down, t, action, x, y, sButtonState, 0,
-                    Float.valueOf(relX), Float.valueOf(relY));
+                    relXValue, relYValue);
         } else {
             ev = obtainMouseGeneric(down, t,
                     action, x, y, sButtonState, null, null,
-                    Float.valueOf(relX), Float.valueOf(relY));
+                    relXValue, relYValue);
         }
         dispatch(ev);
         updateLastCoords(x, y);
