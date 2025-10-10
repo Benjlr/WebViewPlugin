@@ -137,9 +137,18 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment
 
     private void routeEventDirect(MotionEvent ev, int actionMasked) {
         if (mView != null) {
-            mView.dispatchGenericMotionEvent(ev);
+            switch (actionMasked) {
+                case MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_MOVE:
+                case MotionEvent.ACTION_CANCEL:
+                    mView.dispatchTouchEvent(ev);
+                    break;
+                default:
+                    mView.dispatchGenericMotionEvent(ev);
+                    break;
+            }
         }
-        // Force generic for all mouse events
         ev.recycle();
     }
 
