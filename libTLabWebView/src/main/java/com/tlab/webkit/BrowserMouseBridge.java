@@ -158,15 +158,23 @@ public final class BrowserMouseBridge {
         if (sButtonState == 0) sDownTime = t;
         sButtonState |= btn;
 
-        final boolean isPrimaryPress = (btn & MotionEvent.BUTTON_PRIMARY) != 0 && !wasPrimaryDown;
-        final int action = isPrimaryPress ? MotionEvent.ACTION_DOWN : MotionEvent.ACTION_BUTTON_PRESS;
         final float relX = relativeX(x);
         final float relY = relativeY(y);
 
-        MotionEvent ev = obtainMouseEvent(sDownTime, t,
-                action, x, y, sButtonState, btn,
+        // Always emit ACTION_BUTTON_PRESS so legacy consumers keep working.
+        MotionEvent press = obtainMouseEvent(sDownTime, t,
+                MotionEvent.ACTION_BUTTON_PRESS, x, y, sButtonState, btn,
                 Float.valueOf(relX), Float.valueOf(relY));
-        dispatch(ev);
+        dispatch(press);
+
+        // For the first primary press, also synthesize ACTION_DOWN so WebView touch paths run.
+        if ((btn & MotionEvent.BUTTON_PRIMARY) != 0 && !wasPrimaryDown) {
+            MotionEvent down = obtainMouseEvent(sDownTime, t,
+                    MotionEvent.ACTION_DOWN, x, y, sButtonState, 0,
+                    Float.valueOf(relX), Float.valueOf(relY));
+            dispatch(down);
+        }
+
         updateLastCoords(x, y);
         return sDownTime;
     }
@@ -177,16 +185,23 @@ public final class BrowserMouseBridge {
         final boolean wasPrimaryDown = (sButtonState & MotionEvent.BUTTON_PRIMARY) != 0;
         sButtonState &= ~btn;
 
-        final boolean isPrimaryRelease = wasPrimaryDown
+        final boolean isPrimaryRelease = (btn & MotionEvent.BUTTON_PRIMARY) != 0
+                && wasPrimaryDown
                 && (sButtonState & MotionEvent.BUTTON_PRIMARY) == 0;
-        final int action = isPrimaryRelease ? MotionEvent.ACTION_UP : MotionEvent.ACTION_BUTTON_RELEASE;
         final float relX = relativeX(x);
         final float relY = relativeY(y);
 
-        MotionEvent ev = obtainMouseEvent((sDownTime != 0 ? sDownTime : t),
-                t, action, x, y, sButtonState, btn,
+        if (isPrimaryRelease) {
+            MotionEvent up = obtainMouseEvent((sDownTime != 0 ? sDownTime : t),
+                    t, MotionEvent.ACTION_UP, x, y, sButtonState, 0,
+                    Float.valueOf(relX), Float.valueOf(relY));
+            dispatch(up);
+        }
+
+        MotionEvent release = obtainMouseEvent((sDownTime != 0 ? sDownTime : t),
+                t, MotionEvent.ACTION_BUTTON_RELEASE, x, y, sButtonState, btn,
                 Float.valueOf(relX), Float.valueOf(relY));
-        dispatch(ev);
+        dispatch(release);
         updateLastCoords(x, y);
 
         if (sButtonState == 0) sDownTime = 0;
