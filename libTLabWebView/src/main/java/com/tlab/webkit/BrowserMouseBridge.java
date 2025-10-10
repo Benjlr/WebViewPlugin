@@ -5,7 +5,7 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 
 public final class BrowserMouseBridge {
-    public static final String MOUSE_BRIDGE_VERSION = "mb-2025-08-Oct-f"; // <- change on each build
+    public static final String MOUSE_BRIDGE_VERSION = "mb-2025-10-Oct"; // <- change on each build
     public static String getVersion() { return MOUSE_BRIDGE_VERSION; }
 
     private static BaseOffscreenBrowser sBrowser;
@@ -88,7 +88,7 @@ public final class BrowserMouseBridge {
 
         // For ACTION_BUTTON_PRESS/RELEASE, set which button changed (API 23+)
         if (actionButton != 0) {
-            ev.setActionButton(actionButton);
+            ev.setAction(actionButton);
         }
         return ev;
     }
