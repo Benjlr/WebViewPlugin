@@ -8,7 +8,7 @@ import android.view.MotionEvent;
 import java.lang.reflect.Method;
 
 public final class BrowserMouseBridge {
-    public static final String MOUSE_BRIDGE_VERSION = "mb-2025-08-Oct-f"; // <- change on each build
+    public static final String MOUSE_BRIDGE_VERSION = "mb-2025-10-Oct-g"; // <- change on each build
     public static String getVersion() { return MOUSE_BRIDGE_VERSION; }
 
     private static BaseOffscreenBrowser sBrowser;
@@ -229,12 +229,26 @@ public final class BrowserMouseBridge {
         final boolean hadCoords = sHasLastCoords;
         final float relX = relativeX(x);
         final float relY = relativeY(y);
-        final Float relXValue = hadCoords ? Float.valueOf(relX) : null;
-        final Float relYValue = hadCoords ? Float.valueOf(relY) : null;
-        MotionEvent ev = obtainMouseGeneric(down, t,
+
+        // Always deliver an absolute-position hover move so the WebView cursor continues to
+        // follow the Bluetooth mouse when no pointer capture is active.
+        MotionEvent absolute = obtainMouseGeneric(down, t,
                 MotionEvent.ACTION_HOVER_MOVE, x, y, sButtonState, null, null,
-                relXValue, relYValue);
-        dispatch(ev);
+                null, null);
+        dispatch(absolute);
+
+        // Pointer-captured content (e.g., streamed games) expects SOURCE_MOUSE_RELATIVE events
+        // that carry AXIS_RELATIVE_* deltas. Synthesize a second motion event carrying the
+        // relative movement payload once we have a previous coordinate to diff against.
+        if (hadCoords && (relX != 0f || relY != 0f)) {
+            MotionEvent relative = obtainMouseGeneric(down, t,
+                    MotionEvent.ACTION_HOVER_MOVE,
+                    0f, 0f, sButtonState, null, null,
+                    Float.valueOf(relX), Float.valueOf(relY));
+            relative.setSource(InputDevice.SOURCE_MOUSE_RELATIVE);
+            dispatch(relative);
+        }
+
         updateLastCoords(x, y);
     }
 
