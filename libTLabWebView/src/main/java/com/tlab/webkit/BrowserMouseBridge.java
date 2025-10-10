@@ -94,8 +94,7 @@ public final class BrowserMouseBridge {
 
     private static MotionEvent obtainMouseEvent(
             long downTime, long eventTime, int action,
-            float x, float y, int buttonState, int actionButton /*0 if unknown*/,
-            Float relX /*nullable*/, Float relY /*nullable*/) {
+            float x, float y, int buttonState, int actionButton /*0 if unknown*/) {
 
         MotionEvent.PointerProperties[] pps = new MotionEvent.PointerProperties[1];
         MotionEvent.PointerProperties pp = new MotionEvent.PointerProperties();
@@ -108,8 +107,6 @@ public final class BrowserMouseBridge {
         pc.x = x;
         pc.y = y;
         pc.pressure = pressureForState(buttonState);
-        if (relX != null) pc.setAxisValue(MotionEvent.AXIS_RELATIVE_X, relX);
-        if (relY != null) pc.setAxisValue(MotionEvent.AXIS_RELATIVE_Y, relY);
         pcs[0] = pc;
 
         MotionEvent ev = MotionEvent.obtain(
@@ -186,42 +183,22 @@ public final class BrowserMouseBridge {
     public static long mouseButtonDown(int x, int y, int buttonMask) {
         final long t = SystemClock.uptimeMillis();
         final int btn = normalizeMask(buttonMask);
-        final boolean hadAnyButton = sButtonState != 0;
-        final boolean primaryAlreadyDown = (sButtonState & MotionEvent.BUTTON_PRIMARY) != 0;
-        final boolean isPrimaryPress = (btn & MotionEvent.BUTTON_PRIMARY) != 0 && !primaryAlreadyDown;
-
-        if (!hadAnyButton) {
+        if (sButtonState == 0) {
             sDownTime = t;
         }
 
-        if (isPrimaryPress) {
-            sDownTime = t;
-        }
-
-        final int newState = sButtonState | btn;
-        final boolean hadCoords = sHasLastCoords;
-        final float relX = relativeX(x);
-        final float relY = relativeY(y);
-        final Float relXValue = hadCoords ? Float.valueOf(relX) : null;
-        final Float relYValue = hadCoords ? Float.valueOf(relY) : null;
-
-        final int action = isPrimaryPress ? MotionEvent.ACTION_DOWN : MotionEvent.ACTION_BUTTON_PRESS;
-        final int actionButton = isPrimaryPress ? 0 : btn;
+        sButtonState |= btn;
 
         MotionEvent event = obtainMouseEvent(
                 sDownTime,
                 t,
-                action,
+                MotionEvent.ACTION_BUTTON_PRESS,
                 x,
                 y,
-                newState,
-                actionButton,
-                relXValue,
-                relYValue
+                sButtonState,
+                btn
         );
         dispatch(event);
-
-        sButtonState = newState;
         updateLastCoords(x, y);
         return sDownTime;
     }
@@ -229,34 +206,18 @@ public final class BrowserMouseBridge {
     public static void mouseButtonUp(int x, int y, int buttonMask) {
         final long t = SystemClock.uptimeMillis();
         final int btn = normalizeMask(buttonMask);
-        final boolean wasPrimaryDown = (sButtonState & MotionEvent.BUTTON_PRIMARY) != 0;
-        final int newState = sButtonState & ~btn;
-
-        final boolean isPrimaryRelease = (btn & MotionEvent.BUTTON_PRIMARY) != 0 && wasPrimaryDown;
-        final long downTime = (sDownTime != 0 ? sDownTime : t);
-        final boolean hadCoords = sHasLastCoords;
-        final float relX = relativeX(x);
-        final float relY = relativeY(y);
-        final Float relXValue = hadCoords ? Float.valueOf(relX) : null;
-        final Float relYValue = hadCoords ? Float.valueOf(relY) : null;
-
-        final int action = isPrimaryRelease ? MotionEvent.ACTION_UP : MotionEvent.ACTION_BUTTON_RELEASE;
-        final int actionButton = isPrimaryRelease ? 0 : btn;
+        sButtonState &= ~btn;
 
         MotionEvent event = obtainMouseEvent(
-                downTime,
+                (sDownTime != 0 ? sDownTime : t),
                 t,
-                action,
+                MotionEvent.ACTION_BUTTON_RELEASE,
                 x,
                 y,
-                newState,
-                actionButton,
-                relXValue,
-                relYValue
+                sButtonState,
+                btn
         );
         dispatch(event);
-
-        sButtonState = newState;
         updateLastCoords(x, y);
 
         if (sButtonState == 0) sDownTime = 0;
@@ -265,22 +226,14 @@ public final class BrowserMouseBridge {
     public static void mouseMove(int x, int y) {
         final long t = SystemClock.uptimeMillis();
         final long down = (sDownTime != 0 ? sDownTime : t);
-        final boolean isDragging = sButtonState != 0;
-        final int action = isDragging ? MotionEvent.ACTION_MOVE : MotionEvent.ACTION_HOVER_MOVE;
         final boolean hadCoords = sHasLastCoords;
         final float relX = relativeX(x);
         final float relY = relativeY(y);
         final Float relXValue = hadCoords ? Float.valueOf(relX) : null;
         final Float relYValue = hadCoords ? Float.valueOf(relY) : null;
-        MotionEvent ev;
-        if (isDragging) {
-            ev = obtainMouseEvent(down, t, action, x, y, sButtonState, 0,
-                    relXValue, relYValue);
-        } else {
-            ev = obtainMouseGeneric(down, t,
-                    action, x, y, sButtonState, null, null,
-                    relXValue, relYValue);
-        }
+        MotionEvent ev = obtainMouseGeneric(down, t,
+                MotionEvent.ACTION_HOVER_MOVE, x, y, sButtonState, null, null,
+                relXValue, relYValue);
         dispatch(ev);
         updateLastCoords(x, y);
     }

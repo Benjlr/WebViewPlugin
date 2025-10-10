@@ -124,30 +124,18 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment
 
         // (Optional) track for debugging
         mMouseButtonState = ev.getButtonState();
-        final int actionMasked = ev.getActionMasked();
-
         final Activity activity = UnityPlayer.currentActivity;
         if (activity == null || activity.getMainLooper().isCurrentThread()) {
-            routeEventDirect(ev, actionMasked);
+            routeEventDirect(ev);
         } else {
             final MotionEvent copy = MotionEvent.obtain(ev);
-            activity.runOnUiThread(() -> routeEventDirect(copy, copy.getActionMasked()));
+            activity.runOnUiThread(() -> routeEventDirect(copy));
         }
     }
 
-    private void routeEventDirect(MotionEvent ev, int actionMasked) {
+    private void routeEventDirect(MotionEvent ev) {
         if (mView != null) {
-            switch (actionMasked) {
-                case MotionEvent.ACTION_DOWN:
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_MOVE:
-                case MotionEvent.ACTION_CANCEL:
-                    mView.dispatchTouchEvent(ev);
-                    break;
-                default:
-                    mView.dispatchGenericMotionEvent(ev);
-                    break;
-            }
+            mView.dispatchGenericMotionEvent(ev);
         }
         ev.recycle();
     }
