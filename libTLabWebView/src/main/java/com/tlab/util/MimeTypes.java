@@ -1,6 +1,6 @@
 // Copyright (c) 2003-2009, Jodd Team (jodd.org). All Rights Reserved.
 
-package com.tlab.webkit;
+package com.tlab.util;
 
 import java.util.HashMap;
 

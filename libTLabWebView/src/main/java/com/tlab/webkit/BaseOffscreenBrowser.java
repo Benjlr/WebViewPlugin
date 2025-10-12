@@ -25,9 +25,6 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment
 
     protected final Common.Vector2Int mScrollState = new Common.Vector2Int();
     protected final Common.PageGoState mPageGoState = new Common.PageGoState();
-    protected int  mMouseButtonState = 0; // MotionEvent.BUTTON_* bitfield
-    protected long mMouseDownTime    = 0L;
-
     protected final Queue<Common.EventCallback.Message> mUnityPostMessageQueue = new ArrayDeque<>();
     protected final Common.AsyncResult.Manager mAsyncResult = new Common.AsyncResult.Manager();
     protected final Common.SessionState mSessionState = new Common.SessionState();
@@ -122,13 +119,9 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment
     public void onMouseMotionEvent(MotionEvent ev) {
         if (mView == null) return;
 
-        // (Optional) track for debugging
-        mMouseButtonState = ev.getButtonState();
-        final int actionMasked = ev.getActionMasked();
-
         final Activity activity = UnityPlayer.currentActivity;
         if (activity == null || activity.getMainLooper().isCurrentThread()) {
-            routeEventDirect(ev, actionMasked);
+            routeEventDirect(ev, ev.getActionMasked());
         } else {
             final MotionEvent copy = MotionEvent.obtain(ev);
             activity.runOnUiThread(() -> routeEventDirect(copy, copy.getActionMasked()));
@@ -137,7 +130,11 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment
 
     private void routeEventDirect(MotionEvent ev, int actionMasked) {
         if (mView != null) {
+            if(!mView.hasPointerCapture())
+                mView.requestPointerCapture();
+
             mView.dispatchGenericMotionEvent(ev);
+            mView.dispatchCapturedPointerEvent(ev);
         }
         // Force generic for all mouse events
         ev.recycle();

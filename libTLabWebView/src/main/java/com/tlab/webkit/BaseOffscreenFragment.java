@@ -2,6 +2,7 @@ package com.tlab.webkit;
 
 import android.app.Activity;
 import android.hardware.HardwareBuffer;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -12,6 +13,7 @@ import android.view.ViewGroup;
 import android.widget.RelativeLayout;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 
 import com.robot9.shared.SharedTexture;
 import com.tlab.viewtobuffer.ViewToBufferRenderer;
@@ -23,7 +25,6 @@ import java.lang.ref.WeakReference;
 import java.util.concurrent.atomic.AtomicReference;
 
 public abstract class BaseOffscreenFragment {
-
     private static final String TAG = "BaseOffscreenFragment";
     public enum CaptureMode {
         HardwareBuffer, ByteBuffer, Surface
@@ -46,21 +47,21 @@ public abstract class BaseOffscreenFragment {
     private final Handler mFrameHandler = new Handler(Looper.getMainLooper());
     private final AtomicReference<WeakReference<View>> mFrameTarget = new AtomicReference<>(new WeakReference<>(null));
     private final Runnable mFrameInvalidationRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (!mCaptureThreadKeepAlive) {
-                mFrameTarget.set(new WeakReference<>(null));
-                return;
-            }
+    @Override
+    public void run() {
+        if (!mCaptureThreadKeepAlive) {
+            mFrameTarget.set(new WeakReference<>(null));
+            return;
+        }
 
-            View target = mFrameTarget.get().get();
-            if (target == null || !target.isShown()) {
-                mFrameHandler.postDelayed(this, frameDelayMillis());
-                return;
-            }
-
-            target.postInvalidateOnAnimation();
+        View target = mFrameTarget.get().get();
+        if (target == null || !target.isShown()) {
             mFrameHandler.postDelayed(this, frameDelayMillis());
+            return;
+        }
+
+        target.postInvalidateOnAnimation();
+        mFrameHandler.postDelayed(this, frameDelayMillis());
         }
     };
 
@@ -77,7 +78,6 @@ public abstract class BaseOffscreenFragment {
     }
 
     public void ReleaseSharedTexture() {
-        //Log.i(TAG, "release (start)");
         mHwbTexID = null;
         if (mSharedTexture != null) {
             mSharedTexture.release();
@@ -87,7 +87,6 @@ public abstract class BaseOffscreenFragment {
             mSharedBuffer.close();
             mSharedBuffer = null;
         }
-        //Log.i(TAG, "release (end)");
     }
 
     public void UpdateSharedTexture() {

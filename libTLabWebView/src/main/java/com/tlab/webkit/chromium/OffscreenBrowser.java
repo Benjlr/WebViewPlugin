@@ -13,7 +13,7 @@ import com.tlab.viewtobuffer.ViewToHWBRenderer;
 import com.tlab.viewtobuffer.ViewToPBORenderer;
 import com.tlab.viewtobuffer.ViewToSurfaceLayout;
 import com.tlab.webkit.BaseOffscreenBrowser;
-import com.tlab.webkit.BrowserMouseBridge;
+import com.tlab.webkit.VirtualMouse;
 import com.unity3d.player.UnityPlayer;
 
 public class OffscreenBrowser extends BaseOffscreenBrowser {
@@ -63,7 +63,7 @@ public class OffscreenBrowser extends BaseOffscreenBrowser {
         } else if (mCaptureMode == CaptureMode.Surface) {
             mRootLayout.addView(mCaptureLayout, new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT));
         }
-        BrowserMouseBridge.setBrowser(this);
+        VirtualMouse.sBrowser = this;
         startFrameInvalidation(mCaptureLayout);
     }
 
@@ -81,6 +81,6 @@ public class OffscreenBrowser extends BaseOffscreenBrowser {
     @Override
     public void Dispose() {
         stopFrameInvalidation();
-        BrowserMouseBridge.setBrowser(null);
+        VirtualMouse.sBrowser = null;
     }
 }

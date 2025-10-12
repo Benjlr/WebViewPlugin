@@ -33,23 +33,7 @@ public interface IOffscreen {
      * @param y The amount of pixels to scroll by vertically
      */
     void ScrollBy(int x, int y);
-
-    /**
-     * Dispatch a fully-formed mouse MotionEvent (SOURCE_MOUSE, buttonState set, etc.).
-     * Callers (e.g., BrowserMouseBridge) are responsible for setting:
-     *   - event source = SOURCE_MOUSE
-     *   - buttonState (running bitfield)
-     *   - action (DOWN/UP/MOVE/HOVER_ /SCROLL/BUTTON_PRESS/BUTTON_RELEASE)
-            * This method will route it to the appropriate View dispatcher.
-            *
-            * NOTE: The caller may recycle its event AFTER this returns. If we need to
-     *       hop to UI thread, we will clone the event first with MotionEvent.obtain(ev).
-            */
     void onMouseMotionEvent(MotionEvent ev);
-
-    /**
-     * Dispatch a basic key event. (Optional convenience for WebView shortcuts, etc.)
-     */
     void KeyEvent(char key);
 
     void KeyEvent(int keyCode);
