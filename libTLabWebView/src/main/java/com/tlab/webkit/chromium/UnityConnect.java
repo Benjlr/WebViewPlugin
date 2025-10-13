@@ -47,13 +47,10 @@ import com.tlab.webkit.Common.*;
 import com.tlab.widget.AlertDialog;
 import com.unity3d.player.UnityPlayer;
 
-import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Hashtable;
-import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class UnityConnect extends OffscreenBrowser implements IBrowser {
@@ -77,7 +74,6 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
     private void runOnActivityThread(Consumer<Activity> task) {
         runOnActivityThread("Unity activity is not available; ignoring request", task);
     }
-
     private void withWebView(Consumer<WebView> task) {
         runOnActivityThread(activity -> {
             WebView webView = mWebView;
@@ -88,7 +84,6 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             task.accept(webView);
         });
     }
-
     private void disposeOnUiThread() {
         WebView webView = mWebView;
         if (webView == null) {
@@ -122,7 +117,6 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
 
         mDisposed = true;
     }
-
     private void disposeWithoutActivity() {
         if (mCaptureLayout != null) {
             mCaptureLayout.removeAllViews();
@@ -135,7 +129,6 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         mVideoView = null;
         mDisposed = true;
     }
-
     public class JSInterface {
         @JavascriptInterface
         public void postResult(final int id, final String result) {
@@ -297,26 +290,11 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
                 @Override
                 public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
                     super.onReceivedError(view, request, error);
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                            && error != null
-                            && error.getErrorCode() == WebViewClient.ERROR_HOST_LOOKUP) {
-                        logDnsState(view.getContext());
-                    }
                 }
 
                 @Override
                 public void onLoadResource(WebView view, String url) {
                     if (mWebView != null) mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
-                }
-
-                @Override
-                public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                    super.onReceivedError(view, errorCode, description, failingUrl);
-
-                    if (errorCode == WebViewClient.ERROR_HOST_LOOKUP) {
-                        logDnsState(view.getContext());
-                    }
                 }
             });
 
@@ -396,7 +374,6 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             mInitialized = true;
         });
     }
-
     private void showHttpAuthDialog(final HttpAuthHandler handler, final String host, final String realm) {
         Activity activity = UnityPlayer.currentActivity;
         if (activity == null) {
@@ -424,67 +401,6 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         });
         dialog.setNegativeButton("Cancel", (d, w) -> handler.cancel());
         dialog.create().show();
-    }
-
-    private void logDnsState(Context context) {
-        if (context == null) {
-            Log.w(TAG, "Unable to inspect DNS state: context was null");
-            return;
-        }
-
-        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (cm == null) {
-            Log.w(TAG, "ConnectivityManager unavailable; cannot report DNS diagnostics");
-            return;
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Network activeNetwork = cm.getActiveNetwork();
-            if (activeNetwork == null) {
-                Log.w(TAG, "No active network when WebView attempted to resolve host");
-                return;
-            }
-
-            LinkProperties props = cm.getLinkProperties(activeNetwork);
-            if (props == null) {
-                Log.w(TAG, "Active network has no LinkProperties; unable to read DNS servers");
-            } else {
-                List<InetAddress> servers = props.getDnsServers();
-                if (servers == null || servers.isEmpty()) {
-                    Log.w(TAG, "Active network reports no DNS servers");
-                } else {
-                    StringBuilder sb = new StringBuilder();
-                    for (int i = 0; i < servers.size(); i++) {
-                        if (i > 0) sb.append(", ");
-                        sb.append(servers.get(i).getHostAddress());
-                    }
-                    Log.w(TAG, "Active network DNS servers: " + sb);
-                }
-
-                String domains = props.getDomains();
-                if (domains != null && !domains.isEmpty()) {
-                    Log.w(TAG, "Search domains: " + domains);
-                }
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    Log.w(TAG, "Private DNS active: " + props.isPrivateDnsActive() + ", mode: " + props.getPrivateDnsServerName());
-                }
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                NetworkCapabilities caps = cm.getNetworkCapabilities(activeNetwork);
-                if (caps != null) {
-                    Log.w(TAG, "Network capabilities: " + caps);
-                }
-            }
-        } else {
-            android.net.NetworkInfo info = cm.getActiveNetworkInfo();
-            if (info == null) {
-                Log.w(TAG, "No active network when WebView attempted to resolve host");
-            } else {
-                Log.w(TAG, "Active network info: " + info.toString());
-            }
-        }
     }
     @Override
     public void Dispose() {

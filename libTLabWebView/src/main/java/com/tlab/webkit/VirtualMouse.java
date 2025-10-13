@@ -1,11 +1,13 @@
 package com.tlab.webkit;
 
+import android.annotation.SuppressLint;
 import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 
 public final class VirtualMouse {
     public static String getVersion() { return "virtualMouse-v3"; }
+    @SuppressLint("StaticFieldLeak")
     public static BaseOffscreenBrowser sBrowser; // LEAKS
     private static long gestureStartTime = 0;
     private static int  combinedButtonStates = 0;
@@ -14,13 +16,12 @@ public final class VirtualMouse {
         if(startGesture) gestureStartTime = t;
         return new long[]{  (gestureStartTime != 0 ? gestureStartTime : t), t};
     }
-    private  static MotionEvent.PointerProperties[] pointerProps(){
+    private static final MotionEvent.PointerProperties[] PPROPS;
+    static {
         MotionEvent.PointerProperties pp = new MotionEvent.PointerProperties();
-        pp.id = 0;
-        pp.toolType = MotionEvent.TOOL_TYPE_MOUSE;
-        return new MotionEvent.PointerProperties[]{pp};
+        pp.id = 0; pp.toolType = MotionEvent.TOOL_TYPE_MOUSE;
+        PPROPS = new MotionEvent.PointerProperties[]{ pp };
     }
-
     private static int getMouseButtonFromUnity(int unityButton) {
         switch (unityButton) {
             case 1: return MotionEvent.BUTTON_PRIMARY;
@@ -48,7 +49,7 @@ public final class VirtualMouse {
                 eventTimes[1],
                 combinedButtonStates == 0 ? MotionEvent.ACTION_HOVER_MOVE : MotionEvent.ACTION_MOVE ,
                 1,
-                pointerProps(),
+                PPROPS,
                 new MotionEvent.PointerCoords[]{pc},
                 /*metaState*/0,
                 /*buttonState*/combinedButtonStates,
@@ -73,7 +74,7 @@ public final class VirtualMouse {
                 eventTimes[1],
                 MotionEvent.ACTION_SCROLL,
                 1,
-                pointerProps(),
+                PPROPS,
                 new MotionEvent.PointerCoords[]{pc},
                 /*metaState*/0,
                 /*buttonState*/combinedButtonStates,
@@ -87,51 +88,34 @@ public final class VirtualMouse {
     }
 
     public static void mouseButton(int pixelX, int pixelY, int button, boolean pressed) {
+        final boolean newGesture = combinedButtonStates == 0;
+
         if(pressed) combinedButtonStates |= getMouseButtonFromUnity(button);
-        else combinedButtonStates &= getMouseButtonFromUnity(button);
+        else combinedButtonStates &= ~getMouseButtonFromUnity(button);
+
+        final boolean completedGesture = combinedButtonStates == 0;
 
         long[]  eventTimes = eventTime(pressed && gestureStartTime == 0);
         MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
         pc.setAxisValue(MotionEvent.AXIS_X, pixelX);
         pc.setAxisValue(MotionEvent.AXIS_Y, pixelY);
 
+        int action;
+        if(newGesture)
+            action = MotionEvent.ACTION_DOWN;
+        else if(completedGesture)
+            action = MotionEvent.ACTION_UP;
+        else if(pressed)
+            action = MotionEvent.ACTION_BUTTON_PRESS;
+        else
+            action = MotionEvent.ACTION_BUTTON_RELEASE;
+
         dispatch(MotionEvent.obtain(
                 eventTimes[0],
                 eventTimes[1],
-                pressed ? MotionEvent.ACTION_BUTTON_PRESS : MotionEvent.ACTION_BUTTON_RELEASE,
+                action,
                 1,
-                pointerProps(),
-                new MotionEvent.PointerCoords[]{pc},
-                /*metaState*/0,
-                /*buttonState*/combinedButtonStates,
-                /*xPrecision*/1f,
-                /*yPrecision*/1f,
-                /*deviceId*/0,
-                /*edgeFlags*/0,
-                InputDevice.SOURCE_MOUSE,
-                /*flags*/0
-        ));
-
-
-
-        if(combinedButtonStates == 0) gestureStartTime = 0;
-
-    }
-
-    public static void touchChange(int pixelX, int pixelY, int button, boolean pressed) {
-        if(pressed) combinedButtonStates |= getMouseButtonFromUnity(button);
-        else combinedButtonStates &= getMouseButtonFromUnity(button);
-
-        long[]  eventTimes = eventTime(pressed && gestureStartTime == 0);
-        MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
-        pc.setAxisValue(MotionEvent.AXIS_X, pixelX);
-        pc.setAxisValue(MotionEvent.AXIS_Y, pixelY);
-        dispatch(MotionEvent.obtain(
-                eventTimes[0],
-                eventTimes[1],
-                pressed ? MotionEvent.ACTION_DOWN : MotionEvent.ACTION_UP,
-                1,
-                pointerProps(),
+                PPROPS,
                 new MotionEvent.PointerCoords[]{pc},
                 /*metaState*/0,
                 /*buttonState*/combinedButtonStates,
@@ -144,8 +128,5 @@ public final class VirtualMouse {
         ));
 
         if(combinedButtonStates == 0) gestureStartTime = 0;
-
     }
-
-
 }

@@ -20,8 +20,7 @@ import java.util.HashMap;
 import java.util.Objects;
 import java.util.Queue;
 
-public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment
-        implements IOffscreen, IBrowserCommon {
+public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment implements IOffscreen, IBrowserCommon {
 
     protected final Common.Vector2Int mScrollState = new Common.Vector2Int();
     protected final Common.PageGoState mPageGoState = new Common.PageGoState();
@@ -111,61 +110,38 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment
         });
     }
 
-    /**
-     * Receives fully-formed mouse MotionEvents from BrowserMouseBridge.
-     * If not on UI thread, clones and posts to avoid lifecycle/recycle issues.
-     */
     @Override
     public void onMouseMotionEvent(MotionEvent ev) {
         if (mView == null) return;
-
         final Activity activity = UnityPlayer.currentActivity;
-        if (activity == null || activity.getMainLooper().isCurrentThread()) {
-            routeEventDirect(ev, ev.getActionMasked());
-        } else {
-            final MotionEvent copy = MotionEvent.obtain(ev);
-            activity.runOnUiThread(() -> routeEventDirect(copy, copy.getActionMasked()));
-        }
+        activity.runOnUiThread(() -> routeToWebView(ev));
     }
 
-    private void routeEventDirect(MotionEvent ev, int actionMasked) {
-        if (mView != null) {
-            if(!mView.hasPointerCapture())
-                mView.requestPointerCapture();
+    public boolean routeToWebView(MotionEvent ev) {
+        switch (ev.getActionMasked()) {
+            // Touch stream
+            case MotionEvent.ACTION_DOWN:
+            case MotionEvent.ACTION_POINTER_DOWN:
+            case MotionEvent.ACTION_MOVE:
+            case MotionEvent.ACTION_POINTER_UP:
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+            case MotionEvent.ACTION_OUTSIDE:
+                return mView.dispatchTouchEvent(ev);
 
-            mView.dispatchGenericMotionEvent(ev);
-            mView.dispatchCapturedPointerEvent(ev);
+            // Generic motion stream (mouse hover, wheel, button changes)
+            case MotionEvent.ACTION_HOVER_ENTER:
+            case MotionEvent.ACTION_HOVER_MOVE:
+            case MotionEvent.ACTION_HOVER_EXIT:
+            case MotionEvent.ACTION_SCROLL:
+            case MotionEvent.ACTION_BUTTON_PRESS:
+            case MotionEvent.ACTION_BUTTON_RELEASE:
+                return mView.dispatchGenericMotionEvent(ev);
+
+            default:
+                if (mView.dispatchGenericMotionEvent(ev))
+                    return true;
+                return mView.dispatchTouchEvent(ev);
         }
-        // Force generic for all mouse events
-        ev.recycle();
-    }
-
-    protected MotionEvent obtainMouseGeneric(
-            long downTime, long eventTime, int action,
-            float x, float y, int buttonState,
-            Float hScroll, Float vScroll) {
-
-        MotionEvent.PointerProperties[] pps = new MotionEvent.PointerProperties[1];
-        MotionEvent.PointerProperties pp = new MotionEvent.PointerProperties();
-        pp.id = 0;
-        pp.toolType = MotionEvent.TOOL_TYPE_MOUSE;
-        pps[0] = pp;
-
-        MotionEvent.PointerCoords[] pcs = new MotionEvent.PointerCoords[1];
-        MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
-        pc.x = x;
-        pc.y = y;
-        if (hScroll != null) pc.setAxisValue(MotionEvent.AXIS_HSCROLL, hScroll);
-        if (vScroll != null) pc.setAxisValue(MotionEvent.AXIS_VSCROLL, vScroll);
-        pcs[0] = pc;
-
-        return MotionEvent.obtain(
-                downTime, eventTime, action,
-                1, pps, pcs,
-                /*metaState*/0, /*buttonState*/buttonState,
-                /*xPrecision*/1f, /*yPrecision*/1f,
-                /*deviceId*/0, /*edgeFlags*/0,
-                InputDevice.SOURCE_MOUSE, /*flags*/0
-        );
     }
 }
