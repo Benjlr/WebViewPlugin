@@ -122,9 +122,9 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
             // Touch stream
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
-            case MotionEvent.ACTION_MOVE:
-            case MotionEvent.ACTION_POINTER_UP:
             case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_POINTER_UP:
+            case MotionEvent.ACTION_MOVE:
             case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_OUTSIDE:
                 return mView.dispatchTouchEvent(ev);

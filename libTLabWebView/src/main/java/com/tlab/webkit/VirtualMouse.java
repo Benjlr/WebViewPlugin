@@ -91,7 +91,7 @@ public final class VirtualMouse {
         final boolean newGesture = combinedButtonStates == 0;
 
         if(pressed) combinedButtonStates |= getMouseButtonFromUnity(button);
-        else combinedButtonStates &= ~getMouseButtonFromUnity(button);
+
 
         final boolean completedGesture = combinedButtonStates == 0;
 
@@ -101,11 +101,7 @@ public final class VirtualMouse {
         pc.setAxisValue(MotionEvent.AXIS_Y, pixelY);
 
         int action;
-        if(newGesture)
-            action = MotionEvent.ACTION_DOWN;
-        else if(completedGesture)
-            action = MotionEvent.ACTION_UP;
-        else if(pressed)
+        if(pressed)
             action = MotionEvent.ACTION_BUTTON_PRESS;
         else
             action = MotionEvent.ACTION_BUTTON_RELEASE;
@@ -127,6 +123,7 @@ public final class VirtualMouse {
                 /*flags*/0
         ));
 
+        if(!pressed) combinedButtonStates &= ~(getMouseButtonFromUnity(button));
         if(combinedButtonStates == 0) gestureStartTime = 0;
     }
 }
