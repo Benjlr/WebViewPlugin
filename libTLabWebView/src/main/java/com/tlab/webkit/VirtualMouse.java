@@ -88,12 +88,8 @@ public final class VirtualMouse {
     }
 
     public static void mouseButton(int pixelX, int pixelY, int button, boolean pressed) {
-        final boolean newGesture = combinedButtonStates == 0;
 
         if(pressed) combinedButtonStates |= getMouseButtonFromUnity(button);
-
-
-        final boolean completedGesture = combinedButtonStates == 0;
 
         long[]  eventTimes = eventTime(pressed && gestureStartTime == 0);
         MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
@@ -101,10 +97,13 @@ public final class VirtualMouse {
         pc.setAxisValue(MotionEvent.AXIS_Y, pixelY);
 
         int action;
-        if(pressed)
+        if(pressed  )
             action = MotionEvent.ACTION_BUTTON_PRESS;
         else
             action = MotionEvent.ACTION_BUTTON_RELEASE;
+//        else if(pressed) action = MotionEvent.ACTION_MOVE;
+//        else action = MotionEvent.ACTION_MOVE;
+
 
         dispatch(MotionEvent.obtain(
                 eventTimes[0],
