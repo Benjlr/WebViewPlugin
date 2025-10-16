@@ -184,48 +184,6 @@ public abstract class BaseOffscreenFragment {
         });
     }
 
-    /**
-     * Test
-     */
-    public void RenderContent2TmpSurface() {
-        Activity a = UnityPlayer.currentActivity;
-        a.runOnUiThread(() -> {
-            SurfaceView surfaceView = new SurfaceView(a);
-            surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
-                @Override
-                public void surfaceCreated(@NonNull SurfaceHolder holder) {
-                    Log.e(TAG, "[RenderContent2TmpSurface] surfaceCreated");
-                }
-
-                @Override
-                public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
-                    SetSurface(holder.getSurface(), width, height);
-                    Log.e(TAG, "[RenderContent2TmpSurface] surfaceChanged");
-                }
-
-                @Override
-                public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
-                    RemoveSurface();
-                    Log.e(TAG, "[RenderContent2TmpSurface] surfaceDestroyed");
-                }
-            });
-            a.addContentView(surfaceView, new RelativeLayout.LayoutParams(mResState.view.x, mResState.view.y));
-
-            Handler handler = new Handler(Looper.getMainLooper());
-            Runnable pump = new Runnable() {
-                @Override
-                public void run() {
-                    if (mDisposed || !surfaceView.isAttachedToWindow()) {
-                        return;
-                    }
-                    surfaceView.postInvalidateOnAnimation();
-                    handler.postDelayed(this, frameDelayMillis());
-                }
-            };
-            handler.post(pump);
-        });
-    }
-
     protected void startFrameInvalidation(@NonNull View target) {
         synchronized (mCaptureThreadMutex) {
             mCaptureThreadKeepAlive = true;

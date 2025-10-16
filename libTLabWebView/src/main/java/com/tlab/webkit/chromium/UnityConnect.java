@@ -356,8 +356,6 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             webSettings.setJavaScriptEnabled(true);
             webSettings.setAllowContentAccess(true);
             webSettings.setAllowFileAccess(true);
-            webSettings.setAllowFileAccessFromFileURLs(true);
-            webSettings.setAllowUniversalAccessFromFileURLs(true);
             webSettings.setMediaPlaybackRequiresUserGesture(false);
             if (mSessionState.userAgent != null && !mSessionState.userAgent.isEmpty()) {
                 webSettings.setUserAgentString(mSessionState.userAgent);
