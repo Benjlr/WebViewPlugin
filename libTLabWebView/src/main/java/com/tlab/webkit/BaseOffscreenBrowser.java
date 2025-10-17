@@ -2,8 +2,6 @@
 package com.tlab.webkit;
 
 import android.app.Activity;
-import android.content.BroadcastReceiver;
-import android.view.InputDevice;
 import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -16,11 +14,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayDeque;
-import java.util.HashMap;
 import java.util.Objects;
 import java.util.Queue;
 
-public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment implements IOffscreen, IBrowserCommon {
+public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment implements IBrowserCommon {
 
     protected final Common.Vector2Int mScrollState = new Common.Vector2Int();
     protected final Common.PageGoState mPageGoState = new Common.PageGoState();
@@ -30,16 +27,11 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
     protected AlertDialog.Callback mOnDialogResult;
     protected String[] mIntentFilters;
     protected View mView;
-
     public void SetIntentFilters(String[] intentFilters) {
         mIntentFilters = intentFilters;
     }
-    @Override
-    public int GetScrollX() { return mScrollState.x; }
-
-    @Override
-    public int GetScrollY() { return mScrollState.y; }
-
+    @Override public int GetScrollX() { return mScrollState.x; }
+    @Override public int GetScrollY() { return mScrollState.y; }
     public String[] DispatchMessageQueue() {
         String[] messages = new String[mUnityPostMessageQueue.size()];
         for (int i = 0; i < messages.length; i++)
@@ -65,8 +57,7 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
             mOnDialogResult = null;
         });
     }
-    @Override
-    public void ScrollTo(int x, int y) {
+    @Override public void ScrollTo(int x, int y) {
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
             if (mView == null) return;
@@ -75,9 +66,7 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
             mScrollState.y = mView.getScrollY();
         });
     }
-
-    @Override
-    public void ScrollBy(int x, int y) {
+    @Override public void ScrollBy(int x, int y) {
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
             if (mView == null) return;
@@ -86,9 +75,7 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
             mScrollState.y = mView.getScrollY();
         });
     }
-
-    @Override
-    public void KeyEvent(char key) {
+    @Override  public void KeyEvent(char key) {
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
             if (mView == null) return;
@@ -99,9 +86,7 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
             }
         });
     }
-
-    @Override
-    public void KeyEvent(int keyCode) {
+    @Override public void KeyEvent(int keyCode) {
         final Activity a = UnityPlayer.currentActivity;
         a.runOnUiThread(() -> {
             if (mView == null) return;
@@ -109,14 +94,11 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
             mView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, keyCode));
         });
     }
-
-    @Override
-    public void onMouseMotionEvent(MotionEvent ev) {
+    @Override public void onMouseMotionEvent(MotionEvent ev) {
         if (mView == null) return;
         final Activity activity = UnityPlayer.currentActivity;
         activity.runOnUiThread(() -> routeToWebView(ev));
     }
-
     public boolean routeToWebView(MotionEvent ev) {
         switch (ev.getActionMasked()) {
             // Touch stream

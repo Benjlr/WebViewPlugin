@@ -42,6 +42,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 
 import com.tlab.webkit.Common;
+import com.tlab.webkit.CursorCapture;
 import com.tlab.webkit.IBrowser;
 import com.tlab.webkit.Common.*;
 import com.tlab.widget.AlertDialog;
@@ -56,12 +57,9 @@ import java.util.regex.Pattern;
 public class UnityConnect extends OffscreenBrowser implements IBrowser {
     private WebView mWebView;
     private View mVideoView;
-
     private final Map<String, ByteBuffer> mJSPrivateBuffer = new Hashtable<>();
     private final Map<String, ByteBuffer> mJSPublicBuffer = new Hashtable<>();
-
     private static final String TAG = "AreDesk (Chromium)";
-
     private void runOnActivityThread(String failureMessage, Consumer<Activity> task) {
         Activity activity = UnityPlayer.currentActivity;
         if (activity == null) {
@@ -70,7 +68,6 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         }
         activity.runOnUiThread(() -> task.accept(activity));
     }
-
     private void runOnActivityThread(Consumer<Activity> task) {
         runOnActivityThread("Unity activity is not available; ignoring request", task);
     }
@@ -369,6 +366,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
 
             if (mSessionState.loadUrl != null) LoadUrl(mSessionState.loadUrl);
 
+            CursorCapture.browserView = mWebView;
             mInitialized = true;
         });
     }

@@ -13,6 +13,7 @@ import com.tlab.viewtobuffer.ViewToHWBRenderer;
 import com.tlab.viewtobuffer.ViewToPBORenderer;
 import com.tlab.viewtobuffer.ViewToSurfaceLayout;
 import com.tlab.webkit.BaseOffscreenBrowser;
+import com.tlab.webkit.CursorCapture;
 import com.tlab.webkit.VirtualMouse;
 import com.unity3d.player.UnityPlayer;
 
@@ -82,5 +83,6 @@ public class OffscreenBrowser extends BaseOffscreenBrowser {
     public void Dispose() {
         stopFrameInvalidation();
         VirtualMouse.sBrowser = null;
+        CursorCapture.browserView = null;
     }
 }
