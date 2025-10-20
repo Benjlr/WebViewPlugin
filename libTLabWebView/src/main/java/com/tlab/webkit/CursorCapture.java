@@ -22,7 +22,10 @@ public class CursorCapture implements  Application.ActivityLifecycleCallbacks {
     private static final String TAG = "PointerCaptureHelper";
     @SuppressLint("StaticFieldLeak")
     private static final CursorCapture INSTANCE = new CursorCapture(); // LEAKS
-
+    public static void SetBrowserView(View theView) {
+        browserView = theView;
+        Log.d(TAG, "BROWSER SET! IS IT NULL?? " + (browserView == null));
+    }
     private static volatile float lastDx = 0, lastDy = 0;
     private static volatile int lastButtonState = 0;
     private static volatile int lastActionButton = 0;
@@ -48,14 +51,14 @@ public class CursorCapture implements  Application.ActivityLifecycleCallbacks {
             if (action == MotionEvent.ACTION_MOVE || action == MotionEvent.ACTION_HOVER_MOVE) {
                 lastDx = event.getX();
                 lastDy = event.getY();
-                Log.d(TAG, "Captured Relative Move: dx=" + lastDx + ", dy=" + lastDy);
+//                Log.d(TAG, "Captured Relative Move: dx=" + lastDx + ", dy=" + lastDy);
             }
 
             lastButtonState = event.getButtonState();
             if (action == MotionEvent.ACTION_BUTTON_PRESS || action == MotionEvent.ACTION_BUTTON_RELEASE) {
                 lastActionButton = event.getActionButton();
-                Log.d(TAG, "Captured Button State Change: action=" + action +
-                        ", button=" + lastActionButton + ", state=" + lastButtonState);
+//                Log.d(TAG, "Captured Button State Change: action=" + action +
+//                        ", button=" + lastActionButton + ", state=" + lastButtonState);
             }
 
             if (action == MotionEvent.ACTION_SCROLL) {
@@ -64,7 +67,9 @@ public class CursorCapture implements  Application.ActivityLifecycleCallbacks {
                 if (event.getAxisValue(MotionEvent.AXIS_HSCROLL) != 0)
                     lastHorizontalScrollDelta = event.getAxisValue(MotionEvent.AXIS_HSCROLL);
             }
-            return false; // MAYBE THIS SHOULD BE TRUE ?? SEE IF MOTION EVENTS ARE 'DOUBLE HANDLED'
+
+            // MAYBE THIS SHOULD BE TRUE ?? SEE IF MOTION EVENTS ARE 'DOUBLE HANDLED'
+            return false;
         };
     }
 
@@ -166,20 +171,19 @@ public class CursorCapture implements  Application.ActivityLifecycleCallbacks {
 
     public static void beginCapture() {
         Log.d(TAG, "beginCapture: Called from Unity. Requesting capture...");
-        captureRequested = true; // Mark as requested
-        hasCaptureConfirmed = false; // Reset confirmation status
-        lastDx = 0; // Reset deltas on new request
+        captureRequested = true;
+        hasCaptureConfirmed = false;
+        lastDx = 0;
         lastDy = 0;
-        lastButtonState = 0; // Reset button state
-        lastActionButton = 0; // Reset action button
-        lastVerticalScrollDelta = 0; // Reset scroll deltas
+        lastButtonState = 0;
+        lastActionButton = 0;
+        lastVerticalScrollDelta = 0;
         lastHorizontalScrollDelta = 0;
 
         INSTANCE.tryAttachListener();
         if(!captureAttached)
             return;
 
-        INSTANCE.resetCaptureState();
         INSTANCE.mainThreadHandler.postDelayed(() -> browserView.requestPointerCapture(), 100);
     }
     public static void endCapture() {
@@ -190,7 +194,7 @@ public class CursorCapture implements  Application.ActivityLifecycleCallbacks {
         });
     }
     public static boolean isPointerCaptured() {
-        return hasCaptureConfirmed;
+        return hasCaptureConfirmed && browserView != null && browserView.hasPointerCapture();
     }
     public static float getLastDx() {
         float tmp = lastDx;

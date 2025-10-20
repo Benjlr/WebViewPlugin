@@ -366,7 +366,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
 
             if (mSessionState.loadUrl != null) LoadUrl(mSessionState.loadUrl);
 
-            CursorCapture.browserView = mWebView;
+            CursorCapture.SetBrowserView(mWebView);
             mInitialized = true;
         });
     }
