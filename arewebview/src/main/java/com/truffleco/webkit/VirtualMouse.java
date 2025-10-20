@@ -6,7 +6,7 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 
 public final class VirtualMouse {
-    public static String getVersion() { return "virtualMouse-v3"; }
+    public static String getVersion() { return "virtualMouse-v4"; }
     @SuppressLint("StaticFieldLeak")
     public static BaseOffscreenBrowser sBrowser; // LEAKS
     private static long gestureStartTime = 0;
