@@ -100,4 +100,6 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
                 return mView.dispatchTouchEvent(ev);
         }
     }
+
+
 }

@@ -100,4 +100,14 @@ public class OffscreenBrowser extends BaseOffscreenBrowser {
     public void PostDialogResult(int result, String json) {
 
     }
+
+    @Override
+    public void LockCursorOnWebView(){
+    }
+    @Override
+    public void UnlockCursorOnWebView(){
+    }
+    @Override
+    public void vmMove(float dx, float dy, int buttons){
+    }
 }

@@ -6,11 +6,12 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 
 public final class VirtualMouse {
-    public static String getVersion() { return "virtualMouse-v4"; }
+    public static String getVersion() { return "virtualMouse-v5"; }
     @SuppressLint("StaticFieldLeak")
     public static BaseOffscreenBrowser sBrowser; // LEAKS
     private static long gestureStartTime = 0;
     private static int  combinedButtonStates = 0;
+    private static boolean  cursorLocked = false;
     private static long[] eventTime(boolean startGesture){
         final long t = SystemClock.uptimeMillis();
         if(startGesture) gestureStartTime = t;
@@ -38,6 +39,12 @@ public final class VirtualMouse {
         }
     }
     public static void mouseMove(int pixelX, int pixelY, float deltaX, float deltaY) {
+        if(cursorLocked) {
+            sBrowser.vmMove(deltaX, deltaY, combinedButtonStates);
+            return;
+        }
+
+
         long[] eventTimes = eventTime(false);
         MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
         pc.setAxisValue(MotionEvent.AXIS_RELATIVE_X, deltaX);
@@ -61,7 +68,6 @@ public final class VirtualMouse {
                 /*flags*/0
         ));
     }
-
     public static void mouseScroll(int pixelX, int pixelY, float deltaX, float deltaY) {
         long[] eventTimes = eventTime(false);
         MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
@@ -86,7 +92,6 @@ public final class VirtualMouse {
                 /*flags*/0
         ));
     }
-
     public static void mouseButton(int pixelX, int pixelY, int button, boolean pressed) {
 
         if(pressed) combinedButtonStates |= getMouseButtonFromUnity(button);
@@ -101,9 +106,6 @@ public final class VirtualMouse {
             action = MotionEvent.ACTION_BUTTON_PRESS;
         else
             action = MotionEvent.ACTION_BUTTON_RELEASE;
-//        else if(pressed) action = MotionEvent.ACTION_MOVE;
-//        else action = MotionEvent.ACTION_MOVE;
-
 
         dispatch(MotionEvent.obtain(
                 eventTimes[0],
@@ -124,5 +126,17 @@ public final class VirtualMouse {
 
         if(!pressed) combinedButtonStates &= ~(getMouseButtonFromUnity(button));
         if(combinedButtonStates == 0) gestureStartTime = 0;
+    }
+    public static void resetButtonState(){
+        combinedButtonStates = 0;
+        gestureStartTime = 0;
+    }
+    public static void lockCursor(boolean lock){
+        resetButtonState();
+
+        if(lock) sBrowser.LockCursorOnWebView();
+        else sBrowser.UnlockCursorOnWebView();
+
+        cursorLocked = lock;
     }
 }

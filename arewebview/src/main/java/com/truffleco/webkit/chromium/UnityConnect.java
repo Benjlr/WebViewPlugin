@@ -227,6 +227,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
                 public void onPageFinished(WebView view, String url) {
                     if (mWebView != null) mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
                     mSessionState.actualUrl = url;
+                    view.evaluateJavascript(JavascriptMethods.INJECTOR_JS, null);
                     mUnityPostMessageQueue.add(new EventCallback.Message(EventCallback.Type.OnPageFinish, url));
                 }
 
@@ -323,18 +324,20 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             mWebView.setBackgroundColor(0x00000000);
             mWebView.addJavascriptInterface(new JSInterface(), "truffleco");
 
+
             WebSettings webSettings = mWebView.getSettings();
-            webSettings.setLoadWithOverviewMode(true);
             webSettings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
-            webSettings.setUseWideViewPort(true);
-            webSettings.setSupportZoom(true);
-            webSettings.setSupportMultipleWindows(true);
+            webSettings.setTextZoom(100);
+            webSettings.setSupportZoom(false);
+            webSettings.setSupportMultipleWindows(false);
             webSettings.setBuiltInZoomControls(false);
-            webSettings.setDisplayZoomControls(true);
+            webSettings.setDisplayZoomControls(false);
             webSettings.setJavaScriptEnabled(true);
             webSettings.setAllowContentAccess(true);
             webSettings.setAllowFileAccess(true);
             webSettings.setMediaPlaybackRequiresUserGesture(false);
+            webSettings.setLoadWithOverviewMode(true);
+            webSettings.setUseWideViewPort(false);
             if (mSessionState.userAgent != null && !mSessionState.userAgent.isEmpty()) {
                 webSettings.setUserAgentString(mSessionState.userAgent);
             }
@@ -502,5 +505,19 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             cookieManager.removeAllCookies(null);
             cookieManager.flush();
         });
+    }
+
+    @Override
+    public void LockCursorOnWebView(){
+        mWebView.evaluateJavascript("window.__vm && __vm.lock()", null);
+    }
+    @Override
+    public void UnlockCursorOnWebView(){
+        mWebView.evaluateJavascript("window.__vm && __vm.unlock()", null);
+    }
+    @Override
+    public void vmMove(float dx, float dy, int buttons){
+        String js = "window.__vm && __vm.move(" + dx + "," + dy + "," + buttons + ")";
+        mWebView.evaluateJavascript(js, null);
     }
 }

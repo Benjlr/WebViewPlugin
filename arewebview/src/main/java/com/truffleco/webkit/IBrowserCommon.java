@@ -1,6 +1,7 @@
 package com.truffleco.webkit;
 
 import android.view.MotionEvent;
+import android.webkit.WebView;
 
 public interface IBrowserCommon {
     String[] DispatchMessageQueue();
@@ -51,4 +52,8 @@ public interface IBrowserCommon {
     void KeyEvent(char key);
 
     void KeyEvent(int keyCode);
+
+    void LockCursorOnWebView();
+    void UnlockCursorOnWebView();
+    void vmMove(float dx, float dy, int buttons);
 }

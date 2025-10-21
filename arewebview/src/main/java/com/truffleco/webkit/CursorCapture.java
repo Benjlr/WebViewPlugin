@@ -225,6 +225,9 @@ public class CursorCapture implements  Application.ActivityLifecycleCallbacks {
         return tmp;
     }
 
+
+
+
     // --- Unused ActivityLifecycleCallbacks methods ---
     @Override public void onActivityCreated(@NonNull Activity activity, @Nullable Bundle savedInstanceState) {}
     @Override
