@@ -52,45 +52,15 @@ public class JavascriptMethods {
                     "  window.__vm = vm; // expose for Android calls\n" +
                     "})();";
 
-    public static final String VIEWPORT_LOCK_WITH_RESIZE_JS =
+    public static final String VIEWPORT_STATIC =
             "(function(){\n" +
-                    "  if (window.__viewportLockInstalled) return; \n" +
-                    "  window.__viewportLockInstalled = true;\n" +
-                    "\n" +
-                    "  const apply = ()=>{\n" +
-                    "    const dpr = window.devicePixelRatio || 1;\n" +
-                    "    const s = 1 / dpr;\n" +
-                    "    const w = Math.round(window.innerWidth * dpr);\n" +
-                    "    const h = Math.round(window.innerHeight * dpr);\n" +
-                    "    document.querySelectorAll('meta[name=\"viewport\"]').forEach(el => el.remove());\n" +
-                    "    const m = document.createElement('meta');\n" +
-                    "    m.name = 'viewport';\n" +
-                    "    m.content = [\n" +
-                    "      'width=' + w,\n" +
-                    "      'height=' + h,\n" +
-                    "      'initial-scale=' + s,\n" +
-                    "      'minimum-scale=' + s,\n" +
-                    "      'maximum-scale=' + s,\n" +
-                    "      'user-scalable=no',\n" +
-                    "      'viewport-fit=cover'\n" +
-                    "    ].join(', ');\n" +
-                    "    (document.head || document.documentElement).appendChild(m);\n" +
-                    "  };\n" +
-                    "\n" +
-                    "  let rafId = 0;\n" +
-                    "  const onResize = ()=>{\n" +
-                    "    if (rafId) cancelAnimationFrame(rafId);\n" +
-                    "    rafId = requestAnimationFrame(()=>{ rafId = 0; apply(); });\n" +
-                    "  };\n" +
-                    "\n" +
-                    "  window.addEventListener('resize', onResize);\n" +
-                    "  if (window.visualViewport) {\n" +
-                    "    window.visualViewport.addEventListener('resize', onResize);\n" +
-                    "    window.visualViewport.addEventListener('scroll', onResize);\n" +
-                    "  }\n" +
-                    "\n" +
-                    "  apply();\n" +
+                    "  if (window.__viewportStaticInstalled) return; window.__viewportStaticInstalled = true;\n" +
+                    "  // Remove any existing viewport tags\n" +
+                    "  document.querySelectorAll('meta[name=\"viewport\"]').forEach(function(el){ el.remove(); });\n" +
+                    "  var m = document.createElement('meta');\n" +
+                    "  m.name = 'viewport';\n" +
+                    "  m.content = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';\n" +
+                    "  (document.head || document.documentElement).appendChild(m);\n" +
                     "})();";
-
 
 }

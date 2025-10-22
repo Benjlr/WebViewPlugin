@@ -40,7 +40,7 @@ public final class VirtualMouse {
     }
     public static void mouseMove(int pixelX, int pixelY, float deltaX, float deltaY) {
         if(cursorLocked) {
-            sBrowser.vmMove(deltaX, deltaY, combinedButtonStates);
+            sBrowser.vmMove(deltaX, -deltaY, combinedButtonStates);
             return;
         }
 

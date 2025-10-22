@@ -228,7 +228,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
                     if (mWebView != null) mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
                     mSessionState.actualUrl = url;
                     if (mWebView != null) {
-                        mWebView.evaluateJavascript(JavascriptMethods.VIEWPORT_LOCK_WITH_RESIZE_JS, null);
+                        mWebView.evaluateJavascript(JavascriptMethods.VIEWPORT_STATIC, null);
                         mWebView.evaluateJavascript(JavascriptMethods.INJECTOR_JS, null);
                     }
                     mUnityPostMessageQueue.add(new EventCallback.Message(EventCallback.Type.OnPageFinish, url));
@@ -318,7 +318,8 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             mWebView.setOnScrollChangeListener((v, x, y, oldX, oldY) -> mScrollState.update(x, y));
 
             // --- Basic WebView config (unchanged) ---
-//            mWebView.setInitialScale(100);
+            mWebView.setInitialScale(100);
+
             mWebView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
             mWebView.clearCache(true);
             mWebView.setLongClickable(false);
@@ -339,7 +340,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             webSettings.setAllowFileAccess(true);
             webSettings.setMediaPlaybackRequiresUserGesture(false);
             webSettings.setLoadWithOverviewMode(false);
-            webSettings.setUseWideViewPort(true);
+            webSettings.setUseWideViewPort(false);
             if (mSessionState.userAgent != null && !mSessionState.userAgent.isEmpty()) {
                 webSettings.setUserAgentString(mSessionState.userAgent);
             }
