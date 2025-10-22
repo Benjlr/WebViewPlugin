@@ -227,7 +227,10 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
                 public void onPageFinished(WebView view, String url) {
                     if (mWebView != null) mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
                     mSessionState.actualUrl = url;
-                    view.evaluateJavascript(JavascriptMethods.INJECTOR_JS, null);
+                    if (mWebView != null) {
+                        mWebView.evaluateJavascript(JavascriptMethods.VIEWPORT_LOCK_WITH_RESIZE_JS, null);
+                        mWebView.evaluateJavascript(JavascriptMethods.INJECTOR_JS, null);
+                    }
                     mUnityPostMessageQueue.add(new EventCallback.Message(EventCallback.Type.OnPageFinish, url));
                 }
 
@@ -315,7 +318,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             mWebView.setOnScrollChangeListener((v, x, y, oldX, oldY) -> mScrollState.update(x, y));
 
             // --- Basic WebView config (unchanged) ---
-            mWebView.setInitialScale(100);
+//            mWebView.setInitialScale(100);
             mWebView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
             mWebView.clearCache(true);
             mWebView.setLongClickable(false);
@@ -327,7 +330,6 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
 
             WebSettings webSettings = mWebView.getSettings();
             webSettings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
-            webSettings.setTextZoom(100);
             webSettings.setSupportZoom(false);
             webSettings.setSupportMultipleWindows(false);
             webSettings.setBuiltInZoomControls(false);
@@ -336,8 +338,8 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
             webSettings.setAllowContentAccess(true);
             webSettings.setAllowFileAccess(true);
             webSettings.setMediaPlaybackRequiresUserGesture(false);
-            webSettings.setLoadWithOverviewMode(true);
-            webSettings.setUseWideViewPort(false);
+            webSettings.setLoadWithOverviewMode(false);
+            webSettings.setUseWideViewPort(true);
             if (mSessionState.userAgent != null && !mSessionState.userAgent.isEmpty()) {
                 webSettings.setUserAgentString(mSessionState.userAgent);
             }
@@ -493,12 +495,6 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
     public void ClearHistory() {
         withWebView(WebView::clearHistory);
     }
-    public void ZoomIn() {
-        withWebView(webView -> webView.zoomIn());
-    }
-    public void zoomOut() {
-        withWebView(webView -> webView.zoomOut());
-    }
     public void ClearCookie() {
         withWebView(webView -> {
             CookieManager cookieManager = CookieManager.getInstance();
@@ -509,15 +505,36 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
 
     @Override
     public void LockCursorOnWebView(){
-        mWebView.evaluateJavascript("window.__vm && __vm.lock()", null);
+        withWebView(webView -> {
+            try {
+                webView.evaluateJavascript("window.__vm && __vm.lock()", null);
+                Log.i(TAG, "lock webview");
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to lock webview", e);
+            }
+        });
     }
     @Override
     public void UnlockCursorOnWebView(){
-        mWebView.evaluateJavascript("window.__vm && __vm.unlock()", null);
+        withWebView(webView -> {
+            try {
+                mWebView.evaluateJavascript("window.__vm && __vm.unlock()", null);
+                Log.i(TAG, "unlock webview");
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to unlock webview", e);
+            }
+        });
     }
     @Override
     public void vmMove(float dx, float dy, int buttons){
-        String js = "window.__vm && __vm.move(" + dx + "," + dy + "," + buttons + ")";
-        mWebView.evaluateJavascript(js, null);
+        withWebView(webView -> {
+            try {
+                String js = "window.__vm && __vm.move(" + dx + "," + dy + "," + buttons + ")";
+                mWebView.evaluateJavascript(js, null);
+                Log.i(TAG, "moving" + dx + " " + dy);
+            } catch (Exception e) {
+                Log.e(TAG, "PROBLMEM!!", e);
+            }
+        });
     }
 }
