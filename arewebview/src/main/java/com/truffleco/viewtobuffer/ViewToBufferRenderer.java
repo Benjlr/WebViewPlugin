@@ -314,13 +314,15 @@ public class ViewToBufferRenderer implements GLSurfaceView.Renderer {
             if (mForceResizeTex) {
                 destroyBuffer();
                 initBuffer();
-
                 mForceResizeTex = false;
             }
 
+            if (!mFrameAvailable) return;
+            mFrameAvailable = false;
+
             mSurfaceTexture.updateTexImage();
             CopySurfaceTextureToBuffer();
-            mContentExists = mSurfaceEnabled && mFrameAvailable;
+            mContentExists = mSurfaceEnabled;
         }
     }
 

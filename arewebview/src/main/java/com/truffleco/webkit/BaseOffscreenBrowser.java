@@ -10,7 +10,10 @@ import android.view.View;
 import com.unity3d.player.UnityPlayer;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Queue;
+import java.util.regex.Pattern;
 
 public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment implements IBrowserCommon {
 
@@ -20,15 +23,24 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
     protected final Common.AsyncResult.Manager mAsyncResult = new Common.AsyncResult.Manager();
     protected final Common.SessionState mSessionState = new Common.SessionState();
     protected String[] mIntentFilters;
+    protected List<Pattern> mCompiledIntentFilters;
     protected View mView;
     public void SetIntentFilters(String[] intentFilters) {
         mIntentFilters = intentFilters;
+        if (intentFilters != null) {
+            mCompiledIntentFilters = new ArrayList<>(intentFilters.length);
+            for (String filter : intentFilters) {
+                mCompiledIntentFilters.add(Pattern.compile(filter));
+            }
+        } else {
+            mCompiledIntentFilters = null;
+        }
     }
     @Override public int GetScrollX() { return mScrollState.x; }
     @Override public int GetScrollY() { return mScrollState.y; }
 
     public void CancelAsyncResult(int id) {
-        mAsyncResult.post(new Common.AsyncResult(), Common.AsyncResult.Status.CANCEL);
+        mAsyncResult.post(new Common.AsyncResult(id, 0), Common.AsyncResult.Status.CANCEL);
     }
 
     @Override public void ScrollTo(int x, int y) {

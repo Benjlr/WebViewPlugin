@@ -1,6 +1,13 @@
 #include "native.h"
 #include "JNILog.h"
 
+// NOTE: All instance_ptr parameters below are declared as `int` because Unity's
+// UnityRenderingEvent signature is fixed as void(*)(int), and the C# P/Invoke
+// layer passes Java object references as 32-bit ints.  On 64-bit Android the
+// actual jobject pointer is 64-bit; the cast `(jobject)((long)instance_ptr)`
+// below relies on ART's compressed-reference representation keeping values in
+// the lower 32 bits.  If you encounter crashes from corrupt object references,
+// migrate the C# side to pass a jlong and update these signatures to jlong.
 extern "C" {
 using UnityRenderEvent = void (*)(int);
 

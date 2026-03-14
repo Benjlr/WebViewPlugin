@@ -20,6 +20,11 @@ namespace tlab {
 
     std::once_flag glProcOnceFlag;
 
+    static EGLDisplay GetEGLDisplay() {
+        static EGLDisplay sDisplay = GetEGLDisplay();
+        return sDisplay;
+    }
+
     static bool initGLExtProc() noexcept {
         std::call_once(glProcOnceFlag, []() {
             glext::eglGetNativeClientBufferANDROID = (PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC) eglGetProcAddress(
@@ -82,7 +87,7 @@ namespace tlab {
     long
     RenderAPI_OpenGLCoreES::RegistHWBufferConnectedTexture(uint32_t width, uint32_t height,
                                                            AHardwareBuffer *hwBuffer) {
-        m_mutex.lock();
+        std::lock_guard<std::mutex> lock(m_mutex);
 
         auto *hwbImage = new GLESHWBImage();
 
@@ -96,26 +101,21 @@ namespace tlab {
 
         DEVLOGD("[sharedtex-jni] regist platform texture %ld", platformTexID);
 
-        m_mutex.unlock();
-
         return platformTexID;
     }
 
     void
     RenderAPI_OpenGLCoreES::UnRegistHWBufferConnectedTexture(long platformTexID) {
-        m_mutex.lock();
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-        if (m_GLESImageMap.find(std::make_pair(platformTexID, std::this_thread::get_id())) !=
-            m_GLESImageMap.end()) {
-            GLESHWBImage image = m_GLESImageMap[std::make_pair(platformTexID,
-                                                               std::this_thread::get_id())];
-            ImmediateDestroyGLESHWBImage(image);
-            m_GLESImageMap.erase(std::make_pair(platformTexID, std::this_thread::get_id()));
+        auto key = std::make_pair(platformTexID, std::this_thread::get_id());
+        auto it = m_GLESImageMap.find(key);
+        if (it != m_GLESImageMap.end()) {
+            ImmediateDestroyGLESHWBImage(it->second);
+            m_GLESImageMap.erase(it);
 
             DEVLOGD("[sharedtex-jni] delete current platform texture");
         }
-
-        m_mutex.unlock();
     }
 
     bool
@@ -166,7 +166,7 @@ namespace tlab {
             return EGL_NO_NATIVE_FENCE_FD_ANDROID;
         }
 
-        EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+        EGLDisplay display = GetEGLDisplay();
         EGLSyncKHR eglSync = glext::eglCreateSyncKHR(display, EGL_SYNC_NATIVE_FENCE_ANDROID,
                                                      nullptr);
         if (eglSync == EGL_NO_SYNC_KHR) {
@@ -194,7 +194,7 @@ namespace tlab {
             return false;
         }
 
-        EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+        EGLDisplay display = GetEGLDisplay();
         EGLint attribs[] = {EGL_SYNC_NATIVE_FENCE_FD_ANDROID, fenceFd, EGL_NONE};
         EGLSyncKHR eglSync = glext::eglCreateSyncKHR(display, EGL_SYNC_NATIVE_FENCE_ANDROID,
                                                      attribs);
@@ -243,7 +243,7 @@ namespace tlab {
             return false;
         }
 
-        EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+        EGLDisplay display = GetEGLDisplay();
 
         EGLint eglImageAttributes[] = {EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE};
         hwbImage->eglImage = glext::eglCreateImageKHR(display, EGL_NO_CONTEXT,
@@ -279,7 +279,7 @@ namespace tlab {
             hwbImage.hwBuffer = nullptr;
         }
 
-        EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+        EGLDisplay display = GetEGLDisplay();
         if (hwbImage.eglImage != EGL_NO_IMAGE_KHR) {
             glext::eglDestroyImageKHR(display, hwbImage.eglImage);
             hwbImage.eglImage = EGL_NO_IMAGE_KHR;

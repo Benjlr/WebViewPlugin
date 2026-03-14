@@ -12,10 +12,16 @@ public final class VirtualMouse {
     private static long gestureStartTime = 0;
     private static int  combinedButtonStates = 0;
     private static boolean  cursorLocked = false;
+    // Pre-allocated to avoid per-event heap pressure on constrained hardware.
+    private static final long[] sEventTimes = new long[2];
+    private static final MotionEvent.PointerCoords sPC = new MotionEvent.PointerCoords();
+    private static final MotionEvent.PointerCoords[] sPCArray = new MotionEvent.PointerCoords[]{ sPC };
     private static long[] eventTime(boolean startGesture){
         final long t = SystemClock.uptimeMillis();
         if(startGesture) gestureStartTime = t;
-        return new long[]{  (gestureStartTime != 0 ? gestureStartTime : t), t};
+        sEventTimes[0] = (gestureStartTime != 0 ? gestureStartTime : t);
+        sEventTimes[1] = t;
+        return sEventTimes;
     }
     private static final MotionEvent.PointerProperties[] PPROPS;
     static {
@@ -40,24 +46,23 @@ public final class VirtualMouse {
     }
     public static void mouseMove(int pixelX, int pixelY, float deltaX, float deltaY) {
         if(cursorLocked) {
-            sBrowser.vmMove(deltaX, -deltaY, combinedButtonStates);
+            if (sBrowser != null) sBrowser.vmMove(deltaX, -deltaY, combinedButtonStates);
             return;
         }
 
-
         long[] eventTimes = eventTime(false);
-        MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
-        pc.setAxisValue(MotionEvent.AXIS_RELATIVE_X, deltaX);
-        pc.setAxisValue(MotionEvent.AXIS_RELATIVE_Y, deltaY);
-        pc.setAxisValue(MotionEvent.AXIS_X, pixelX);
-        pc.setAxisValue(MotionEvent.AXIS_Y, pixelY);
+        sPC.clear();
+        sPC.setAxisValue(MotionEvent.AXIS_RELATIVE_X, deltaX);
+        sPC.setAxisValue(MotionEvent.AXIS_RELATIVE_Y, deltaY);
+        sPC.setAxisValue(MotionEvent.AXIS_X, pixelX);
+        sPC.setAxisValue(MotionEvent.AXIS_Y, pixelY);
         dispatch(MotionEvent.obtain(
                 eventTimes[0],
                 eventTimes[1],
-                combinedButtonStates == 0 ? MotionEvent.ACTION_HOVER_MOVE : MotionEvent.ACTION_MOVE ,
+                combinedButtonStates == 0 ? MotionEvent.ACTION_HOVER_MOVE : MotionEvent.ACTION_MOVE,
                 1,
                 PPROPS,
-                new MotionEvent.PointerCoords[]{pc},
+                sPCArray,
                 /*metaState*/0,
                 /*buttonState*/combinedButtonStates,
                 /*xPrecision*/1f,
@@ -70,18 +75,18 @@ public final class VirtualMouse {
     }
     public static void mouseScroll(int pixelX, int pixelY, float deltaX, float deltaY) {
         long[] eventTimes = eventTime(false);
-        MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
-        pc.setAxisValue(MotionEvent.AXIS_X, pixelX);
-        pc.setAxisValue(MotionEvent.AXIS_Y, pixelY);
-        pc.setAxisValue(MotionEvent.AXIS_HSCROLL, deltaX);
-        pc.setAxisValue(MotionEvent.AXIS_VSCROLL, deltaY);
+        sPC.clear();
+        sPC.setAxisValue(MotionEvent.AXIS_X, pixelX);
+        sPC.setAxisValue(MotionEvent.AXIS_Y, pixelY);
+        sPC.setAxisValue(MotionEvent.AXIS_HSCROLL, deltaX);
+        sPC.setAxisValue(MotionEvent.AXIS_VSCROLL, deltaY);
         dispatch(MotionEvent.obtain(
                 eventTimes[0],
                 eventTimes[1],
                 MotionEvent.ACTION_SCROLL,
                 1,
                 PPROPS,
-                new MotionEvent.PointerCoords[]{pc},
+                sPCArray,
                 /*metaState*/0,
                 /*buttonState*/combinedButtonStates,
                 /*xPrecision*/1f,
@@ -97,15 +102,11 @@ public final class VirtualMouse {
         if(pressed) combinedButtonStates |= getMouseButtonFromUnity(button);
 
         long[]  eventTimes = eventTime(pressed && gestureStartTime == 0);
-        MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
-        pc.setAxisValue(MotionEvent.AXIS_X, pixelX);
-        pc.setAxisValue(MotionEvent.AXIS_Y, pixelY);
+        sPC.clear();
+        sPC.setAxisValue(MotionEvent.AXIS_X, pixelX);
+        sPC.setAxisValue(MotionEvent.AXIS_Y, pixelY);
 
-        int action;
-        if(pressed  )
-            action = MotionEvent.ACTION_BUTTON_PRESS;
-        else
-            action = MotionEvent.ACTION_BUTTON_RELEASE;
+        int action = pressed ? MotionEvent.ACTION_BUTTON_PRESS : MotionEvent.ACTION_BUTTON_RELEASE;
 
         dispatch(MotionEvent.obtain(
                 eventTimes[0],
@@ -113,7 +114,7 @@ public final class VirtualMouse {
                 action,
                 1,
                 PPROPS,
-                new MotionEvent.PointerCoords[]{pc},
+                sPCArray,
                 /*metaState*/0,
                 /*buttonState*/combinedButtonStates,
                 /*xPrecision*/1f,
@@ -134,8 +135,10 @@ public final class VirtualMouse {
     public static void lockCursor(boolean lock){
         resetButtonState();
 
-        if(lock) sBrowser.LockCursorOnWebView();
-        else sBrowser.UnlockCursorOnWebView();
+        if (sBrowser != null) {
+            if(lock) sBrowser.LockCursorOnWebView();
+            else sBrowser.UnlockCursorOnWebView();
+        }
 
         cursorLocked = lock;
     }

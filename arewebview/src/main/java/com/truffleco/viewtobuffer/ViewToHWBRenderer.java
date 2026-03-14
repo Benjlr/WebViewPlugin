@@ -3,6 +3,7 @@ package com.truffleco.viewtobuffer;
 import android.hardware.HardwareBuffer;
 import android.opengl.GLES11Ext;
 import android.opengl.GLES30;
+import android.util.Log;
 
 import com.robot9.shared.SharedTexture;
 
@@ -48,8 +49,12 @@ public class ViewToHWBRenderer extends ViewToBufferRenderer {
         mSharedTexture = new SharedTexture(mTexSize.x, mTexSize.y, false);
         mSharedBuffer = mSharedTexture.getHardwareBuffer();
 
+        if (mSharedBuffer == null) {
+            Log.e(TAG, "initBuffer failed: HardwareBuffer allocation returned null");
+            return;
+        }
+
         // Plugin returns long variable, but in OpenGL, texture id can be used by int, so cast here.
-        assert mSharedTexture != null;
         mHwbFboTexID[0] = (int) mSharedTexture.getPlatformTexture();
 
         GLES30.glGenFramebuffers(1, mHwbFboID, 0);
@@ -84,7 +89,7 @@ public class ViewToHWBRenderer extends ViewToBufferRenderer {
         GLES30.glDisable(GLES30.GL_CULL_FACE);
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4);
 
-        GLES30.glFlush();
+        GLES30.glFinish();
 
         GLES30.glDisableVertexAttribArray(mGlSamplerPositionID);
         GLES30.glDisableVertexAttribArray(mGlSamplerTexCoordID);

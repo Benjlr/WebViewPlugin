@@ -35,16 +35,15 @@ import com.truffleco.webkit.Common.*;
 import com.unity3d.player.UnityPlayer;
 
 import java.nio.ByteBuffer;
-import java.util.Hashtable;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 
 public class UnityConnect extends OffscreenBrowser implements IBrowser {
     private WebView mWebView;
     private View mVideoView;
-    private final Map<String, ByteBuffer> mJSPrivateBuffer = new Hashtable<>();
-    private final Map<String, ByteBuffer> mJSPublicBuffer = new Hashtable<>();
+    private final Map<String, ByteBuffer> mJSPrivateBuffer = new HashMap<>();
+    private final Map<String, ByteBuffer> mJSPublicBuffer = new HashMap<>();
     private static final String TAG = "AreDesk (Chromium)";
     private void runOnActivityThread(String failureMessage, Consumer<Activity> task) {
         Activity activity = UnityPlayer.currentActivity;
@@ -98,6 +97,8 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         mCaptureLayout = null;
         mGlSurfaceView = null;
 
+        mJSPublicBuffer.clear();
+        mJSPrivateBuffer.clear();
         mDisposed = true;
     }
     private void disposeWithoutActivity() {
@@ -110,6 +111,8 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         mCaptureLayout = null;
         mGlSurfaceView = null;
         mVideoView = null;
+        mJSPublicBuffer.clear();
+        mJSPrivateBuffer.clear();
         mDisposed = true;
     }
     public class JSInterface {
@@ -154,9 +157,9 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
 
         @JavascriptInterface
         public void write(String key, byte[] bytes) {
-            if (mJSPublicBuffer.containsKey(key)) {
-                ByteBuffer buf = mJSPublicBuffer.get(key);
-                if (buf != null) buf.put(bytes, 0, bytes.length);
+            ByteBuffer buf = mJSPublicBuffer.get(key);
+            if (buf != null && bytes.length <= buf.remaining()) {
+                buf.put(bytes, 0, bytes.length);
             }
         }
 
@@ -174,9 +177,9 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
 
         @JavascriptInterface
         public void _write(String key, byte[] bytes) {
-            if (mJSPrivateBuffer.containsKey(key)) {
-                ByteBuffer buf = mJSPrivateBuffer.get(key);
-                if (buf != null) buf.put(bytes, 0, bytes.length);
+            ByteBuffer buf = mJSPrivateBuffer.get(key);
+            if (buf != null && bytes.length <= buf.remaining()) {
+                buf.put(bytes, 0, bytes.length);
             }
         }
 
@@ -228,8 +231,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
                     if (mWebView != null) mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
                     mSessionState.actualUrl = url;
                     if (mWebView != null) {
-                        mWebView.evaluateJavascript(JavascriptMethods.VIEWPORT_STATIC, null);
-                        mWebView.evaluateJavascript(JavascriptMethods.INJECTOR_JS, null);
+                        mWebView.evaluateJavascript(JavascriptMethods.VIEWPORT_STATIC + "\n" + JavascriptMethods.INJECTOR_JS, null);
                     }
                     mUnityPostMessageQueue.add(new EventCallback.Message(EventCallback.Type.OnPageFinish, url));
                 }
@@ -242,9 +244,9 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
 
                     if (mWebView != null) mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
 
-                    if (mIntentFilters != null) {
-                        for (String intentFilter : mIntentFilters) {
-                            if (Pattern.compile(intentFilter).matcher(next).matches()) {
+                    if (mCompiledIntentFilters != null) {
+                        for (java.util.regex.Pattern intentFilter : mCompiledIntentFilters) {
+                            if (intentFilter.matcher(next).matches()) {
                                 Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(next));
                                 view.getContext().startActivity(intent);
                                 return true;
@@ -266,17 +268,12 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
                 @SuppressLint("WebViewClientOnReceivedSslError")
                 @Override
                 public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-
+                    handler.cancel();
                 }
 
                 @Override
                 public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
                     super.onReceivedError(view, request, error);
-                }
-
-                @Override
-                public void onLoadResource(WebView view, String url) {
-                    if (mWebView != null) mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
                 }
             });
 
@@ -447,9 +444,9 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
                 return;
             }
 
-            if (mIntentFilters != null) {
-                for (String intentFilter : mIntentFilters) {
-                    if (Pattern.compile(intentFilter).matcher(url).matches()) {
+            if (mCompiledIntentFilters != null) {
+                for (java.util.regex.Pattern intentFilter : mCompiledIntentFilters) {
+                    if (intentFilter.matcher(url).matches()) {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                         webView.getContext().startActivity(intent);
                         mSessionState.loadUrl = url;
@@ -509,7 +506,6 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         withWebView(webView -> {
             try {
                 webView.evaluateJavascript("window.__vm && __vm.lock()", null);
-                Log.i(TAG, "lock webview");
             } catch (Exception e) {
                 Log.e(TAG, "Failed to lock webview", e);
             }
@@ -519,8 +515,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
     public void UnlockCursorOnWebView(){
         withWebView(webView -> {
             try {
-                mWebView.evaluateJavascript("window.__vm && __vm.unlock()", null);
-                Log.i(TAG, "unlock webview");
+                webView.evaluateJavascript("window.__vm && __vm.unlock()", null);
             } catch (Exception e) {
                 Log.e(TAG, "Failed to unlock webview", e);
             }
@@ -530,11 +525,9 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
     public void vmMove(float dx, float dy, int buttons){
         withWebView(webView -> {
             try {
-                String js = "window.__vm && __vm.move(" + dx + "," + dy + "," + buttons + ")";
-                mWebView.evaluateJavascript(js, null);
-                Log.i(TAG, "moving" + dx + " " + dy);
+                webView.evaluateJavascript("window.__vm && __vm.move(" + dx + "," + dy + "," + buttons + ")", null);
             } catch (Exception e) {
-                Log.e(TAG, "PROBLMEM!!", e);
+                Log.e(TAG, "vmMove failed", e);
             }
         });
     }
