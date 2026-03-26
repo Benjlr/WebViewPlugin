@@ -17,6 +17,8 @@ import java.util.regex.Pattern;
 
 public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment implements IBrowserCommon {
 
+    private static final KeyCharacterMap KCM = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD);
+
     protected final Common.Vector2Int mScrollState = new Common.Vector2Int();
     protected final Common.PageGoState mPageGoState = new Common.PageGoState();
     protected final Queue<Common.EventCallback.Message> mUnityPostMessageQueue = new ArrayDeque<>();
@@ -45,6 +47,7 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
 
     @Override public void ScrollTo(int x, int y) {
         final Activity a = UnityPlayer.currentActivity;
+        if (a == null) return;
         a.runOnUiThread(() -> {
             if (mView == null) return;
             mView.scrollTo(x, y);
@@ -54,6 +57,7 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
     }
     @Override public void ScrollBy(int x, int y) {
         final Activity a = UnityPlayer.currentActivity;
+        if (a == null) return;
         a.runOnUiThread(() -> {
             if (mView == null) return;
             mView.scrollBy(x, y);
@@ -63,10 +67,10 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
     }
     @Override  public void KeyEvent(char key) {
         final Activity a = UnityPlayer.currentActivity;
+        if (a == null) return;
         a.runOnUiThread(() -> {
             if (mView == null) return;
-            KeyCharacterMap kcm = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD);
-            KeyEvent[] events = kcm.getEvents(new char[]{key});
+            KeyEvent[] events = KCM.getEvents(new char[]{key});
             if (events != null) {
                 for (KeyEvent event : events) mView.dispatchKeyEvent(event);
             }
@@ -74,6 +78,7 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
     }
     @Override public void KeyEvent(int keyCode) {
         final Activity a = UnityPlayer.currentActivity;
+        if (a == null) return;
         a.runOnUiThread(() -> {
             if (mView == null) return;
             mView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, keyCode));
@@ -83,6 +88,7 @@ public abstract class BaseOffscreenBrowser extends BaseOffscreenFragment impleme
     @Override public void onMouseMotionEvent(MotionEvent ev) {
         if (mView == null) return;
         final Activity activity = UnityPlayer.currentActivity;
+        if (activity == null) return;
         activity.runOnUiThread(() -> routeToWebView(ev));
     }
     public boolean routeToWebView(MotionEvent ev) {

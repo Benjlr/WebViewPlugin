@@ -1,56 +1,53 @@
 package com.truffleco.webkit.chromium;
 
 public class JavascriptMethods {
+
     public static final String INJECTOR_JS =
             "(function(){\n" +
-                    "  if (window.__vm) return; // already installed\n" +
-                    "  const clamp=(v,min,max)=>v<min?min:(v>max?max:v);\n" +
-                    "  const getTarget=(x,y)=>document.elementFromPoint(x,y)||document.body;\n" +
-                    "  const vm={\n" +
-                    "    // Visible/client coords (clamped to viewport)\n" +
-                    "    x: innerWidth/2,\n" +
-                    "    y: innerHeight/2,\n" +
-                    "    // Unbounded virtual coords for delta math\n" +
-                    "    rawX: innerWidth/2,\n" +
-                    "    rawY: innerHeight/2,\n" +
-                    "    lastRawX: null,\n" +
-                    "    lastRawY: null,\n" +
+                    "  if (window.__vm) return;\n" +
+                    "  var cachedTarget = document.querySelector('video') || document.querySelector('canvas') || document.documentElement;\n" +
+                    "  const getTarget = () => {\n" +
+                    "    if (cachedTarget.isConnected) return cachedTarget;\n" +
+                    "    cachedTarget = document.querySelector('video') || document.querySelector('canvas') || document.documentElement;\n" +
+                    "    return cachedTarget;\n" +
+                    "  };\n" +
+                    "  const clamp = (v, min, max) => v < min ? min : (v > max ? max : v);\n" +
+                    "  const vm = {\n" +
+                    "    x: innerWidth / 2, y: innerHeight / 2,\n" +
+                    "    rawX: innerWidth / 2, rawY: innerHeight / 2,\n" +
                     "    cursorHidden: false,\n" +
-                    "    // Update visible coords by clamping raw\n" +
-                    "    _syncVisibleFromRaw: function(){\n" +
+                    "    _dispatchMouse: function(type, buttons, dx, dy) {\n" +
+                    "      const t = getTarget();\n" +
+                    "      t.dispatchEvent(new MouseEvent(type, {\n" +
+                    "        bubbles: true, cancelable: true, view: window,\n" +
+                    "        clientX: this.x, clientY: this.y,\n" +
+                    "        screenX: this.x, screenY: this.y,\n" +
+                    "        movementX: dx, movementY: dy,\n" +
+                    "        buttons: buttons\n" +
+                    "      }));\n" +
+                    "    },\n" +
+                    "    move: function(dx, dy, buttons) {\n" +
+                    "      this.rawX += dx; this.rawY += dy;\n" +
                     "      this.x = clamp(this.rawX, 0, innerWidth - 1);\n" +
                     "      this.y = clamp(this.rawY, 0, innerHeight - 1);\n" +
+                    "      this._dispatchMouse('mousemove', buttons, dx, dy);\n" +
                     "    },\n" +
-                    "    // Dispatch a bubbling mouse event at current (x,y), with explicit movement\n" +
-                    "    _dispatchMouse: function(type, init, mdx, mdy){\n" +
-                    "      const t = getTarget(this.x, this.y);\n" +
-                    "      const ev = new MouseEvent(type, Object.assign({\n" +
-                    "        bubbles:true, cancelable:true, view:window,\n" +
-                    "        clientX:this.x, clientY:this.y,\n" +
-                    "        screenX:this.x, screenY:this.y\n" +
-                    "      }, init||{}));\n" +
-                    "      // Force movementX/Y to reflect raw deltas even if clientX/Y are clamped\n" +
-                    "      try{ Object.defineProperty(ev,'movementX',{value: mdx||0}); }catch(e){}\n" +
-                    "      try{ Object.defineProperty(ev,'movementY',{value: mdy||0}); }catch(e){}\n" +
-                    "      // Optional debug\n" +
-                    "      console.log('[vm] move dx=%o dy=%o raw=(%o,%o) vis=(%o,%o)', mdx||0, mdy||0, this.rawX, this.rawY, this.x, this.y);\n" +
-                    "      t.dispatchEvent(ev);\n" +
+                    "    lock: function() {\n" +
+                    "      if (this.cursorHidden) return;\n" +
+                    "      document.documentElement.style.cursor = 'none';\n" +
+                    "      this.cursorHidden = true;\n" +
                     "    },\n" +
-                    "    // Public move: advance RAW by (dx,dy), clamp visible, emit deltas from RAW\n" +
-                    "    move: function(dx, dy, buttons){\n" +
-                    "      this.rawX += dx; this.rawY += dy;\n" +
-                    "      const mdx = (this.lastRawX==null ? 0 : this.rawX - this.lastRawX);\n" +
-                    "      const mdy = (this.lastRawY==null ? 0 : this.rawY - this.lastRawY);\n" +
-                    "      this.lastRawX = this.rawX; this.lastRawY = this.rawY;\n" +
-                    "      this._syncVisibleFromRaw();\n" +
-                    "      this._dispatchMouse('mousemove', { buttons: (buttons|0) }, mdx, mdy);\n" +
-                    "    },\n" +
-                    "    // Lock/unlock just hide/show the cursor; you can keep your Android-side overlay\n" +
-                    "    lock: function(){ if (this.cursorHidden) return; document.documentElement.style.cursor='none'; this.cursorHidden=true; },\n" +
-                    "    unlock: function(){ if (!this.cursorHidden) return; document.documentElement.style.cursor=''; this.cursorHidden=false; }\n" +
+                    "    unlock: function() {\n" +
+                    "      if (!this.cursorHidden) return;\n" +
+                    "      document.documentElement.style.cursor = '';\n" +
+                    "      this.cursorHidden = false;\n" +
+                    "    }\n" +
                     "  };\n" +
-                    "  window.__vm = vm; // expose for Android calls\n" +
+                    "  window.__vm = vm;\n" +
                     "})();";
+
+    // Precomputed: injected on every page finish. Avoids string allocation per page load.
+    public static final String INIT_JS = INJECTOR_JS + "\n" + VIEWPORT_STATIC;
 
     public static final String VIEWPORT_STATIC =
             "(function(){\n" +

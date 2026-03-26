@@ -31,13 +31,9 @@ public class ViewToSurfaceLayout extends LinearLayout {
 
     @Override
     public void draw(@NonNull Canvas canvas) {
-        if (mSurface == null) {
-            return;
-        }
-
         synchronized (this) {
+            if (mSurface == null) return;
             Canvas target = mSurface.lockHardwareCanvas();
-
             if (target != null) {
                 super.draw(target);
                 mSurface.unlockCanvasAndPost(target);

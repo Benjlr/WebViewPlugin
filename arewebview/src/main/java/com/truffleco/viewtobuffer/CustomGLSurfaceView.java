@@ -18,19 +18,14 @@ public class CustomGLSurfaceView extends GLSurfaceView {
 
     private static final String TAG = "native";
 
-    /**
-     * @return
-     */
-    private int[] getContextAttributes() {
-        // https://developer.android.com/reference/android/opengl/EGL14#EGL_CONTEXT_CLIENT_VERSION
-        return new int[]{
-                EGL14.EGL_CONTEXT_CLIENT_VERSION /* 0x3098 */, 3,
-                EGL15.EGL_CONTEXT_MAJOR_VERSION, 3,
-                EGL15.EGL_CONTEXT_MINOR_VERSION, 2,
-                EGLExt.EGL_CONTEXT_MAJOR_VERSION_KHR, 3,
-                EGLExt.EGL_CONTEXT_MINOR_VERSION_KHR, 2,
-                EGL10.EGL_NONE};
-    }
+    // https://developer.android.com/reference/android/opengl/EGL14#EGL_CONTEXT_CLIENT_VERSION
+    private static final int[] CONTEXT_ATTRIBUTES = {
+            EGL14.EGL_CONTEXT_CLIENT_VERSION /* 0x3098 */, 3,
+            EGL15.EGL_CONTEXT_MAJOR_VERSION, 3,
+            EGL15.EGL_CONTEXT_MINOR_VERSION, 2,
+            EGLExt.EGL_CONTEXT_MAJOR_VERSION_KHR, 3,
+            EGLExt.EGL_CONTEXT_MINOR_VERSION_KHR, 2,
+            EGL10.EGL_NONE};
 
     private EGLContextFactory mEglContextFactory = new EGLContextFactory() {
         /**
@@ -56,7 +51,7 @@ public class CustomGLSurfaceView extends GLSurfaceView {
             // This worked well on some devices and not on others.
             // EGL_BAD_MATCH (Oculus quest 2)
 
-            EGLContext context = egl.eglCreateContext(display, config, EGL10.EGL_NO_CONTEXT, getContextAttributes());
+            EGLContext context = egl.eglCreateContext(display, config, EGL10.EGL_NO_CONTEXT, CONTEXT_ATTRIBUTES);
 
             return context;
         }

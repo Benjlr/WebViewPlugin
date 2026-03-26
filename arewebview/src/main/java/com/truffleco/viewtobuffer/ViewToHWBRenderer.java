@@ -89,7 +89,19 @@ public class ViewToHWBRenderer extends ViewToBufferRenderer {
         GLES30.glDisable(GLES30.GL_CULL_FACE);
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4);
 
-        GLES30.glFinish();
+        // glFenceSync + glClientWaitSync instead of glFinish().
+        // glFinish() stalls the entire GPU pipeline — it blocks the CPU until every pending
+        // GPU command across all contexts completes. A fence sync is scoped to this specific
+        // draw, so the driver has more freedom to schedule other work in parallel.
+        // GL_SYNC_FLUSH_COMMANDS_BIT ensures the sync is submitted even if the command
+        // buffer hasn't been flushed yet (equivalent to calling glFlush first).
+        // 2-second timeout is a hard upper bound; in practice this completes in <1 frame.
+        long sync = GLES30.glFenceSync(GLES30.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        int waitResult = GLES30.glClientWaitSync(sync, GLES30.GL_SYNC_FLUSH_COMMANDS_BIT, 2_000_000_000L);
+        GLES30.glDeleteSync(sync);
+        if (waitResult == GLES30.GL_TIMEOUT_EXPIRED || waitResult == GLES30.GL_WAIT_FAILED) {
+            Log.w(TAG, "glClientWaitSync: unexpected result " + waitResult + " — frame may be incomplete");
+        }
 
         GLES30.glDisableVertexAttribArray(mGlSamplerPositionID);
         GLES30.glDisableVertexAttribArray(mGlSamplerTexCoordID);

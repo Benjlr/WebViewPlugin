@@ -27,6 +27,10 @@ public abstract class BaseOffscreenFragment {
     protected CaptureMode mCaptureMode = CaptureMode.HardwareBuffer;
     protected final Common.ResolutionState mResState = new Common.ResolutionState();
     protected ViewToBufferRenderer mViewToBufferRenderer;
+    // Typed references — set at init, avoids instanceof on every hot-path call.
+    protected ViewToHWBRenderer mHWBRenderer;
+    protected ViewToPBORenderer mPBORenderer;
+    private static final byte[] EMPTY_BYTES = new byte[0];
     protected RelativeLayout mRootLayout;
     protected long[] mHwbTexID;
     protected boolean mIsVulkan;
@@ -35,6 +39,7 @@ public abstract class BaseOffscreenFragment {
     protected boolean mCaptureThreadKeepAlive = false;
     protected final Object mCaptureThreadMutex = new Object();
     protected int mFps = 30;
+    private long mFrameDelayMillis = 1000L / 30;
     public boolean mInitialized = false;
     public boolean mDisposed = false;
     protected boolean mIsSharedBufferExchanged = true;
@@ -51,12 +56,12 @@ public abstract class BaseOffscreenFragment {
 
         View target = mFrameTarget.get().get();
         if (target == null || !target.isShown()) {
-            mFrameHandler.postDelayed(this, frameDelayMillis());
+            mFrameHandler.postDelayed(this, mFrameDelayMillis);
             return;
         }
 
         target.postInvalidateOnAnimation();
-        mFrameHandler.postDelayed(this, frameDelayMillis());
+        mFrameHandler.postDelayed(this, mFrameDelayMillis);
         }
     };
 
@@ -85,8 +90,8 @@ public abstract class BaseOffscreenFragment {
     }
 
     public void UpdateSharedTexture() {
-        if (mViewToBufferRenderer instanceof ViewToHWBRenderer) {
-            HardwareBuffer sharedBuffer = ((ViewToHWBRenderer) mViewToBufferRenderer).getHardwareBuffer();
+        if (mHWBRenderer != null) {
+            HardwareBuffer sharedBuffer = mHWBRenderer.getHardwareBuffer();
 
             if (sharedBuffer == null) return;
 
@@ -114,13 +119,13 @@ public abstract class BaseOffscreenFragment {
     }
 
     public byte[] GetFrameBuffer() {
-        if (mViewToBufferRenderer instanceof ViewToPBORenderer)
-            return ((ViewToPBORenderer) mViewToBufferRenderer).getPixelBuffer();
-        return new byte[0];
+        if (mPBORenderer != null) return mPBORenderer.getPixelBuffer();
+        return EMPTY_BYTES;
     }
 
     public void SetFps(int fps) {
         mFps = fps;
+        mFrameDelayMillis = 1000L / Math.max(1, fps);
         restartFrameInvalidationIfNeeded();
     }
 
@@ -159,7 +164,7 @@ public abstract class BaseOffscreenFragment {
             updateRootLayoutSize(mResState.view.x, mResState.view.y);
         });
     }
-//
+
     public void ResizeTex(int texWidth, int texHeight) {
         if (mViewToBufferRenderer != null) {
             mResState.tex.update(texWidth, texHeight);
@@ -194,10 +199,6 @@ public abstract class BaseOffscreenFragment {
             mFrameHandler.removeCallbacks(mFrameInvalidationRunnable);
             mFrameTarget.set(new WeakReference<>(null));
         }
-    }
-
-    private long frameDelayMillis() {
-        return 1000L / Math.max(1, mFps);
     }
 
     private void restartFrameInvalidationIfNeeded() {

@@ -5,43 +5,42 @@ import com.truffleco.util.Common.*;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.Queue;
-
 public class Common {
     public static class AsyncResult extends JSONSerialisable {
+        // Fixed 10-slot pool using a plain array + bitmask — no HashMap/ArrayDeque/boxing.
+        // All operations are O(1). Bit i of mPendingMask = slot i has been requested but
+        // not yet resolved; mResults[i] non-null = result is ready to be consumed.
         public static class Manager {
-            private final HashMap<Integer, AsyncResult> mResults = new HashMap<>();
-            private final Queue<Integer> mIdAvails = new ArrayDeque<>();
-
-            public Manager() {
-                for (int i = 0; i < 10; i++) mIdAvails.add(i);
-            }
+            private static final int CAPACITY = 10;
+            private final AsyncResult[] mResults = new AsyncResult[CAPACITY];
+            private int mPendingMask = 0; // bit i set → slot i is in-use
 
             public int request() {
-                if (mIdAvails.isEmpty()) return -1;
-                Integer id = mIdAvails.poll();
-                if (id != null) return id;
+                for (int i = 0; i < CAPACITY; i++) {
+                    if ((mPendingMask & (1 << i)) == 0) {
+                        mPendingMask |= (1 << i);
+                        return i;
+                    }
+                }
                 return -1;
             }
 
             public void post(AsyncResult result, int status) {
                 int id = result.id;
-                if (mIdAvails.contains(id)) return;  // This result id is not valid.
-
-                if (!mResults.containsKey(id)) {
-                    result.status = status;
-                    mIdAvails.add(id);
-                    mResults.put(id, result);
-                }
+                if (id < 0 || id >= CAPACITY) return;
+                if ((mPendingMask & (1 << id)) == 0) return; // id not in use
+                if (mResults[id] != null) return;             // result already posted
+                result.status = status;
+                mResults[id] = result;
             }
 
             public AsyncResult get(int id) {
-                if (!mResults.containsKey(id)) return null;
-                AsyncResult result = mResults.get(id);
-                mResults.remove(id);
-                return result;
+                if (id < 0 || id >= CAPACITY) return null;
+                AsyncResult r = mResults[id];
+                if (r == null) return null;
+                mResults[id] = null;
+                mPendingMask &= ~(1 << id);
+                return r;
             }
         }
 

@@ -231,7 +231,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
                     if (mWebView != null) mPageGoState.update(mWebView.canGoBack(), mWebView.canGoForward());
                     mSessionState.actualUrl = url;
                     if (mWebView != null) {
-                        mWebView.evaluateJavascript(JavascriptMethods.VIEWPORT_STATIC + "\n" + JavascriptMethods.INJECTOR_JS, null);
+                        mWebView.evaluateJavascript(JavascriptMethods.INIT_JS, null);
                     }
                     mUnityPostMessageQueue.add(new EventCallback.Message(EventCallback.Type.OnPageFinish, url));
                 }
@@ -396,13 +396,7 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         activity.runOnUiThread(this::disposeOnUiThread);
     }
     public void EvaluateJS(String js) {
-        withWebView(webView -> {
-            if (!webView.getSettings().getJavaScriptEnabled()) {
-                Log.w(TAG, "JavaScript execution requested but disabled; ignoring call");
-                return;
-            }
-            webView.evaluateJavascript("(function(){" + js + "})();", null);
-        });
+        withWebView(webView -> webView.evaluateJavascript("(function(){" + js + "})();", null));
     }
     public int EvaluateJSForResult(String varNameOfResultId, String js) {
         int id = mAsyncResult.request();
@@ -472,11 +466,8 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
         withWebView(webView -> { if (mPageGoState.canGoForward) webView.goForward(); });
     }
     public byte[] GetJSBuffer(String id) {
-        if (mJSPublicBuffer.containsKey(id)) {
-            ByteBuffer buf = mJSPublicBuffer.get(id);
-            return (buf != null) ? buf.array() : null;
-        }
-        return null;
+        ByteBuffer buf = mJSPublicBuffer.get(id);
+        return buf != null ? buf.array() : null;
     }
     public void LoadHtml(final String html, final String baseURL) {
         withWebView(webView -> webView.loadDataWithBaseURL(baseURL, html, "text/html", "UTF8", null));
@@ -523,12 +514,27 @@ public class UnityConnect extends OffscreenBrowser implements IBrowser {
     }
     @Override
     public void vmMove(float dx, float dy, int buttons){
-        withWebView(webView -> {
-            try {
-                webView.evaluateJavascript("window.__vm && __vm.move(" + dx + "," + dy + "," + buttons + ")", null);
-            } catch (Exception e) {
-                Log.e(TAG, "vmMove failed", e);
-            }
-        });
+        withWebView(webView -> webView.evaluateJavascript(
+                "window.__vm&&__vm.move(" + dx + "," + dy + "," + buttons + ")", null));
+    }
+
+    private static final String[] EMPTY_STRING_ARRAY = new String[0];
+
+    @Override
+    public String[] DispatchMessageQueue() {
+        if (mUnityPostMessageQueue.isEmpty()) return EMPTY_STRING_ARRAY;
+        String[] result = new String[mUnityPostMessageQueue.size()];
+        int i = 0;
+        Common.EventCallback.Message msg;
+        while ((msg = mUnityPostMessageQueue.poll()) != null) {
+            result[i++] = msg.toJSON().toString();
+        }
+        return result;
+    }
+
+    @Override
+    public String GetAsyncResult(int id) {
+        Common.AsyncResult result = mAsyncResult.get(id);
+        return result != null ? result.toJSON().toString() : "";
     }
 }

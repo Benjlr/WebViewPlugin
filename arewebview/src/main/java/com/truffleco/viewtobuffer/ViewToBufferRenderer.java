@@ -71,16 +71,14 @@ public class ViewToBufferRenderer implements GLSurfaceView.Renderer {
 
     protected volatile boolean mFrameAvailable = false;
 
+    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
+
     public void initSamplerShader() {
         //@formatter:off
         String vertexShader =
                 "attribute vec4 position;\n" +
                         "attribute vec4 inputTexCoord;\n" +
-                        "\n" +
                         "varying vec2 texCoord;\n" +
-                        "\n" +
-                        "uniform mat4 textureTransform;\n" +
-                        "\n" +
                         "void main() {\n" +
                         "    texCoord = inputTexCoord.xy;\n" +
                         "    gl_Position = position;\n" +
@@ -97,11 +95,8 @@ public class ViewToBufferRenderer implements GLSurfaceView.Renderer {
                         "\n" +
                         "void main() {\n" +
                         "    vec4 col = texture2D(inputTex, texCoord);\n" +
-                        "    col = vec4(col.x, col.y, col.z, col.w);\n" +
-                        "\n" +
-                        "    // The EGL sharing method required gamma correction in the shaders.\n" +
-                        "    col = pow(col, vec4(2.2));\n" +
-                        "    gl_FragColor = col;\n" +
+                        "    // EGL sharing requires gamma correction.\n" +
+                        "    gl_FragColor = pow(col, vec4(2.2));\n" +
                         "}";
         //@formatter:on
 
@@ -184,8 +179,7 @@ public class ViewToBufferRenderer implements GLSurfaceView.Renderer {
 
         mSurfaceTexture = new SurfaceTexture(mSurfaceTextureID[0]);
         mSurfaceTexture.setDefaultBufferSize(width, height);
-        Handler handler = new Handler(Looper.getMainLooper());
-        mSurfaceTexture.setOnFrameAvailableListener(surfaceTexture -> mFrameAvailable = true, handler);
+        mSurfaceTexture.setOnFrameAvailableListener(surfaceTexture -> mFrameAvailable = true, mMainHandler);
         mSurface = new Surface(mSurfaceTexture);
     }
 
@@ -235,6 +229,10 @@ public class ViewToBufferRenderer implements GLSurfaceView.Renderer {
         GLES30.glGenBuffers(1, mGlTexCoordID, 0);
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, mGlTexCoordID[0]);
         GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, mGlTextureBuffer.capacity() * SIZEOF_FLOAT, mGlTextureBuffer, GLES30.GL_STATIC_DRAW);
+
+        // Data is now on the GPU; release the CPU-side direct buffers.
+        mGlCubeBuffer = null;
+        mGlTextureBuffer = null;
     }
 
     protected void init() {

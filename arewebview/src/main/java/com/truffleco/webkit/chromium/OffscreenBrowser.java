@@ -33,10 +33,12 @@ public class OffscreenBrowser extends BaseOffscreenBrowser {
         if ((mCaptureMode == CaptureMode.HardwareBuffer) || (mCaptureMode == CaptureMode.ByteBuffer)) {
             switch (mCaptureMode) {
                 case HardwareBuffer:
-                    mViewToBufferRenderer = new ViewToHWBRenderer();
+                    mHWBRenderer = new ViewToHWBRenderer();
+                    mViewToBufferRenderer = mHWBRenderer;
                     break;
                 case ByteBuffer:
-                    mViewToBufferRenderer = new ViewToPBORenderer();
+                    mPBORenderer = new ViewToPBORenderer();
+                    mViewToBufferRenderer = mPBORenderer;
                     break;
             }
             mViewToBufferRenderer.setTextureResolution(mResState.tex.x, mResState.tex.y);
@@ -84,6 +86,8 @@ public class OffscreenBrowser extends BaseOffscreenBrowser {
         stopFrameInvalidation();
         VirtualMouse.sBrowser = null;
         CursorCapture.browserView = null;
+        mHWBRenderer = null;
+        mPBORenderer = null;
     }
 
     @Override
