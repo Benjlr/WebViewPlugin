@@ -6,7 +6,7 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 
 public final class VirtualMouse {
-    public static String getVersion() { return "virtualMouse-v5"; }
+    public static String getVersion() { return "virtualMouse-v6"; }
     @SuppressLint("StaticFieldLeak")
     public static BaseOffscreenBrowser sBrowser; // LEAKS
     private static long gestureStartTime = 0;
@@ -133,6 +133,7 @@ public final class VirtualMouse {
         gestureStartTime = 0;
     }
     public static void lockCursor(boolean lock){
+        if (cursorLocked == lock) return;
         resetButtonState();
 
         if (sBrowser != null) {

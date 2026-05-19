@@ -45,10 +45,6 @@ public class JavascriptMethods {
                     "  };\n" +
                     "  window.__vm = vm;\n" +
                     "})();";
-
-    // Precomputed: injected on every page finish. Avoids string allocation per page load.
-    public static final String INIT_JS = INJECTOR_JS + "\n" + VIEWPORT_STATIC;
-
     public static final String VIEWPORT_STATIC =
             "(function(){\n" +
                     "  if (window.__viewportStaticInstalled) return; window.__viewportStaticInstalled = true;\n" +
@@ -59,5 +55,6 @@ public class JavascriptMethods {
                     "  m.content = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';\n" +
                     "  (document.head || document.documentElement).appendChild(m);\n" +
                     "})();";
-
+    // Precomputed: injected on every page finish. Avoids string allocation per page load.
+    public static final String INIT_JS = INJECTOR_JS + "\n" + VIEWPORT_STATIC;
 }

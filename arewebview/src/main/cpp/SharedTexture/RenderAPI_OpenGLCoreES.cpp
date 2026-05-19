@@ -21,7 +21,7 @@ namespace tlab {
     std::once_flag glProcOnceFlag;
 
     static EGLDisplay GetEGLDisplay() {
-        static EGLDisplay sDisplay = GetEGLDisplay();
+        static EGLDisplay sDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
         return sDisplay;
     }
 
